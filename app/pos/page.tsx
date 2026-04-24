@@ -171,6 +171,19 @@ export default function POSPage() {
     }
   }, [pos]);
 
+  // Check if Firebase is configured
+  if (typeof window !== 'undefined' && !db) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">Configuration Error</h1>
+          <p className="text-gray-600 mb-4">Firebase is not configured. Please set the environment variables.</p>
+          <p className="text-sm text-gray-500">Check the .env.example file for required variables.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       <Toaster position="top-right" toastOptions={{ duration: 2000 }} />

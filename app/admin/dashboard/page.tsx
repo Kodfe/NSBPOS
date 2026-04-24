@@ -107,6 +107,19 @@ export default function DashboardPage() {
   const rangeLabel = range === 'today' ? "Today's" : range === 'yesterday' ? "Yesterday's"
     : range === '7days' ? 'Last 7 Days' : range === '30days' ? 'Last 30 Days' : 'Custom Range';
 
+  // Check if Firebase is configured
+  if (typeof window !== 'undefined' && !db) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">Configuration Error</h1>
+          <p className="text-gray-600 mb-4">Firebase is not configured. Please set the environment variables.</p>
+          <p className="text-sm text-gray-500">Check the .env.example file for required variables.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
       {/* Header */}

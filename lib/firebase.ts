@@ -29,15 +29,19 @@ const initializeFirebase = () => {
 export const getDb = () => {
   if (!dbInstance) {
     const app = initializeFirebase();
-    dbInstance = getFirestore(app);
+    if (app) {
+      dbInstance = getFirestore(app);
+    }
   }
   return dbInstance;
 };
 
-export const getAuthInstance = () => {
+const getAuthInstance = () => {
   if (!authInstance) {
     const app = initializeFirebase();
-    authInstance = getAuth(app);
+    if (app) {
+      authInstance = getAuth(app);
+    }
   }
   return authInstance;
 };
