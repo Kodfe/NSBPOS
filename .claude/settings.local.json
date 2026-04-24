@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir=false --import-alias=\"@/*\" --yes --skip-install)",
+      "Bash(cp -r \"/c/Users/saptr/Music/nsb-pos-temp/.\" \"/c/Users/saptr/Music/NSB POS/\")",
+      "Bash(rm -rf \"/c/Users/saptr/Music/nsb-pos-temp\")",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/pos)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(curl -s -o /dev/null -w \"/admin: %{http_code}\\\\n\" http://localhost:3000/admin)",
+      "Bash(curl -s -o /dev/null -w \"/admin/dashboard: %{http_code}\\\\n\" http://localhost:3000/admin/dashboard)",
+      "Bash(curl -s -o /dev/null -w \"/admin/products: %{http_code}\\\\n\" http://localhost:3000/admin/products)",
+      "Bash(curl -s -o /dev/null -w \"/admin/machines: %{http_code}\\\\n\" http://localhost:3000/admin/machines)",
+      "Bash(curl -s -o /dev/null -w \"/admin/operators: %{http_code}\\\\n\" http://localhost:3000/admin/operators)",
+      "Bash(npx firebase *)",
+      "Bash(npm list *)",
+      "Bash(firebase use *)",
+      "Bash(firebase login *)",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('FilePen' in l, 'FilePenLine' in l, 'PenLine' in l, 'Edit3' in l\\);\")"
+    ]
+  }
+}

@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Products ─────────────────────────────────────────────────────────────
+    // POS reads products; admin creates/updates/deletes
+    match /products/{id} {
+      allow read: if true;
+      allow write: if true;   // TODO: restrict to admin auth when login is added
+    }
+
+    // ── Bills ────────────────────────────────────────────────────────────────
+    // POS creates bills; admin reads
+    match /bills/{id} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if false;  // bills should never be deleted
+    }
+
+    // ── Customers ────────────────────────────────────────────────────────────
+    // POS looks up by phone & creates new customers
+    match /customers/{id} {
+      allow read, write: if true;
+    }
+
+    // ── Operators ────────────────────────────────────────────────────────────
+    // POS reads operators (PIN verification); admin manages
+    match /operators/{id} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // ── Machines ─────────────────────────────────────────────────────────────
+    // Admin manages machines; POS reads assigned machine
+    match /machines/{id} {
+      allow read, write: if true;
+    }
+
+    // ── Machine Logs ─────────────────────────────────────────────────────────
+    match /machineLogs/{id} {
+      allow read, write: if true;
+    }
+
+    // ── Settings ─────────────────────────────────────────────────────────────
+    match /settings/{id} {
+      allow read, write: if true;
+    }
+
+    // ── Categories ───────────────────────────────────────────────────────────
+    match /categories/{id} {
+      allow read, write: if true;
+    }
+
+    // ── Parties (suppliers/vendors) ───────────────────────────────────────────
+    match /parties/{id} {
+      allow read, write: if true;
+    }
+
+    // ── Purchase Bills ────────────────────────────────────────────────────────
+    match /purchaseBills/{id} {
+      allow read, write: if true;
+    }
+
+    // ── Purchase Orders ───────────────────────────────────────────────────────
+    match /purchaseOrders/{id} {
+      allow read, write: if true;
+    }
+
+    // ── Purchase Returns ──────────────────────────────────────────────────────
+    match /purchaseReturns/{id} {
+      allow read, write: if true;
+    }
+
+    // ── Debit Notes ───────────────────────────────────────────────────────────
+    match /debitNotes/{id} {
+      allow read, write: if true;
+    }
+  }
+}

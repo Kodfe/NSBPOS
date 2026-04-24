@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --color-saffron-50: #fff8ed;
+  --color-saffron-100: #ffeecc;
+  --color-saffron-200: #ffd999;
+  --color-saffron-300: #ffbf55;
+  --color-saffron-400: #ff9933;
+  --color-saffron-500: #e8821a;
+  --color-saffron-600: #cc6600;
+  --color-saffron-700: #a35200;
+  --color-saffron-800: #7a3f00;
+  --color-saffron-900: #572d00;
+  --color-saffron-950: #3d1e00;
+}
+
+:root {
+  --background: #f8f9fa;
+  --foreground: #1a1a1a;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', Arial, Helvetica, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #ff9933;
+  border-radius: 4px;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-slide-up { animation: slideUp 0.3s ease-out; }
+.animate-fade-in { animation: fadeIn 0.2s ease-out; }
