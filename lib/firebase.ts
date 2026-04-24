@@ -12,8 +12,36 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+let app: any = null;
+let dbInstance: any = null;
+let authInstance: any = null;
 
-export const db = getFirestore(app);
-export const auth = getAuth(app);
-export default app;
+const initializeFirebase = () => {
+  if (!firebaseConfig.apiKey) {
+    throw new Error('Firebase API key not configured');
+  }
+  if (!app) {
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+  }
+  return app;
+};
+
+export const getDb = () => {
+  if (!dbInstance) {
+    const app = initializeFirebase();
+    dbInstance = getFirestore(app);
+  }
+  return dbInstance;
+};
+
+export const getAuthInstance = () => {
+  if (!authInstance) {
+    const app = initializeFirebase();
+    authInstance = getAuth(app);
+  }
+  return authInstance;
+};
+
+export const db = typeof window === 'undefined' ? null : getDb();
+export const auth = typeof window === 'undefined' ? null : getAuthInstance();
+export default initializeFirebase;
