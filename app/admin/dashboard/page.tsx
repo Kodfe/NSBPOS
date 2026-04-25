@@ -11,6 +11,7 @@ import {
 import { format, subDays, startOfDay, endOfDay, startOfMonth, subMonths } from 'date-fns';
 import StatsCard from '@/components/admin/StatsCard';
 import { getSalesSummary } from '@/lib/admin-firestore';
+import { db } from '@/lib/firebase';
 import { SalesSummary } from '@/types';
 import { DEMO_PRODUCTS } from '@/lib/demo-data';
 
