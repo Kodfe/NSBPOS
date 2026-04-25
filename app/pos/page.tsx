@@ -21,6 +21,7 @@ import { getProductByBarcode, generateBillNumber } from '@/lib/firestore';
 import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
 import { addStoreCredit, updateCustomerStats } from '@/lib/customers-firestore';
 import { cancelBill, returnStock, markBillAsAdjusted } from '@/lib/firestore';
+import { db } from '@/lib/firebase';
 import { Bill, PaymentDetails, Product, StoreSettings } from '@/types';
 
 export default function POSPage() {

@@ -22,7 +22,8 @@
       "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('FilePen' in l, 'FilePenLine' in l, 'PenLine' in l, 'Edit3' in l\\);\")",
       "Bash(gh api *)",
       "PowerShell(gh api user --jq '{login: .login, email: .email, name: .name}')",
-      "PowerShell(Get-Command gh -ErrorAction SilentlyContinue; [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) -split \";\" | Select-String -Pattern \"git|github\" -CaseSensitive:$false)"
+      "PowerShell(Get-Command gh -ErrorAction SilentlyContinue; [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) -split \";\" | Select-String -Pattern \"git|github\" -CaseSensitive:$false)",
+      "PowerShell(cd \"C:\\\\Users\\\\saptr\\\\Music\\\\NSB POS\"; git diff origin/main HEAD -- app/pos/page.tsx | Select-Object -First 40)"
     ]
   }
 }
