@@ -1,4 +1,5 @@
 'use client';
+import type { RefObject } from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { Search, ScanBarcode, Scale } from 'lucide-react';
 import { Product } from '@/types';
@@ -10,6 +11,7 @@ interface Props {
   onAddItem: (product: Product) => void;
   onAddLooseItem: (product: Product, weightKg: number) => void;
   onBarcodeSearch: (barcode: string) => void;
+  searchInputRef?: RefObject<HTMLInputElement | null>;
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -18,15 +20,21 @@ const CATEGORY_ICONS: Record<string, string> = {
   Biscuits: '🍪', Snacks: '🍟', Beverages: '🥤', Vegetables: '🥦', Fruits: '🍎',
 };
 
-export default function ProductSearch({ products, onAddItem, onAddLooseItem, onBarcodeSearch }: Props) {
+export default function ProductSearch({
+  products,
+  onAddItem,
+  onAddLooseItem,
+  onBarcodeSearch,
+  searchInputRef,
+}: Props) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [weightProduct, setWeightProduct] = useState<Product | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    searchRef.current?.focus();
-  }, []);
+    (searchInputRef?.current ?? searchRef.current)?.focus();
+  }, [searchInputRef]);
 
   const handleSearchChange = (val: string) => {
     setSearch(val);
@@ -58,7 +66,7 @@ export default function ProductSearch({ products, onAddItem, onAddLooseItem, onB
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input
-            ref={searchRef}
+            ref={searchInputRef ?? searchRef}
             value={search}
             onChange={e => handleSearchChange(e.target.value)}
             placeholder="Search products or scan barcode (F2)"
