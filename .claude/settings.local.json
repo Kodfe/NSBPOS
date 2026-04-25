@@ -23,7 +23,8 @@
       "Bash(gh api *)",
       "PowerShell(gh api user --jq '{login: .login, email: .email, name: .name}')",
       "PowerShell(Get-Command gh -ErrorAction SilentlyContinue; [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) -split \";\" | Select-String -Pattern \"git|github\" -CaseSensitive:$false)",
-      "PowerShell(cd \"C:\\\\Users\\\\saptr\\\\Music\\\\NSB POS\"; git diff origin/main HEAD -- app/pos/page.tsx | Select-Object -First 40)"
+      "PowerShell(cd \"C:\\\\Users\\\\saptr\\\\Music\\\\NSB POS\"; git diff origin/main HEAD -- app/pos/page.tsx | Select-Object -First 40)",
+      "PowerShell(Start-Sleep -Seconds 3; Get-Content \"$env:TEMP\\\\git_cred_out.txt\" -ErrorAction SilentlyContinue)"
     ]
   }
 }
