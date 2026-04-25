@@ -19,7 +19,10 @@
       "Bash(npm list *)",
       "Bash(firebase use *)",
       "Bash(firebase login *)",
-      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('FilePen' in l, 'FilePenLine' in l, 'PenLine' in l, 'Edit3' in l\\);\")"
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('FilePen' in l, 'FilePenLine' in l, 'PenLine' in l, 'Edit3' in l\\);\")",
+      "Bash(gh api *)",
+      "PowerShell(gh api user --jq '{login: .login, email: .email, name: .name}')",
+      "PowerShell(Get-Command gh -ErrorAction SilentlyContinue; [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) -split \";\" | Select-String -Pattern \"git|github\" -CaseSensitive:$false)"
     ]
   }
 }
