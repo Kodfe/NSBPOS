@@ -1,7 +1,8 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, ScanBarcode, Scale } from 'lucide-react';
 import { Product, Category } from '@/types';
+import { normalizeBarcode } from '@/lib/utils';
 import WeightModal from './WeightModal';
 
 interface Props {
@@ -17,6 +18,7 @@ export default function ProductSearch({ products, categories, onAddItem, onAddLo
   const [category, setCategory] = useState('All');
   const [weightProduct, setWeightProduct] = useState<Product | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const barcodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     searchRef.current?.focus();
@@ -25,13 +27,35 @@ export default function ProductSearch({ products, categories, onAddItem, onAddLo
   const iconMap = Object.fromEntries(categories.map(c => [c.name, c.icon ?? '📦']));
   const allTabs = [{ name: 'All', icon: '🛒' }, ...categories];
 
+  const submitBarcode = useCallback((value: string) => {
+    const barcode = normalizeBarcode(value);
+    if (!barcode) return;
+    if (barcodeTimerRef.current) {
+      clearTimeout(barcodeTimerRef.current);
+      barcodeTimerRef.current = null;
+    }
+    setSearch('');
+    onBarcodeSearch(barcode);
+  }, [onBarcodeSearch]);
+
   const handleSearchChange = (val: string) => {
     setSearch(val);
-    if (/^\d{8,}$/.test(val.trim())) {
-      onBarcodeSearch(val.trim());
-      setSearch('');
+    if (barcodeTimerRef.current) {
+      clearTimeout(barcodeTimerRef.current);
+      barcodeTimerRef.current = null;
+    }
+
+    const barcode = normalizeBarcode(val);
+    if (/^\d{8,}$/.test(barcode)) {
+      barcodeTimerRef.current = setTimeout(() => submitBarcode(barcode), 200);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
+    };
+  }, []);
 
   function handleProductClick(product: Product) {
     if (product.isLoose) {
@@ -58,6 +82,12 @@ export default function ProductSearch({ products, categories, onAddItem, onAddLo
             ref={searchRef}
             value={search}
             onChange={e => handleSearchChange(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                submitBarcode(search);
+              }
+            }}
             placeholder="Search products or scan barcode (F2)"
             className="w-full pl-9 pr-10 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-saffron-400 focus:ring-2 focus:ring-saffron-100"
           />

@@ -55,6 +55,10 @@ export function todayString(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+export function normalizeBarcode(value?: string | null): string {
+  return value?.replace(/[\s\x00-\x1F\x7F]/g, '').trim() ?? '';
+}
+
 /**
  * Recursively removes every key whose value is `undefined`.
  * Firestore throws if you try to write `undefined` anywhere in a document.

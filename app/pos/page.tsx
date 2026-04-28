@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Keyboard, Store, Clock, Wifi, WifiOff, Receipt } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -22,6 +22,7 @@ import { db } from '@/lib/firebase';
 import { addStoreCredit, updateCustomerStats } from '@/lib/customers-firestore';
 import { cancelBill, returnStock, markBillAsAdjusted } from '@/lib/firestore';
 import { getCategories } from '@/lib/categories-firestore';
+import { normalizeBarcode } from '@/lib/utils';
 import { Bill, PaymentDetails, Product, Category, StoreSettings } from '@/types';
 
 export default function POSPage() {
@@ -38,7 +39,6 @@ export default function POSPage() {
   const [showBillSearch, setShowBillSearch] = useState(false);
   const [returnBill, setReturnBill] = useState<Bill | null>(null);
 
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const pos = usePOS();
 
   // Load store settings
@@ -100,7 +100,8 @@ export default function POSPage() {
   }, [pos]);
 
   const handleBarcodeSearch = useCallback(async (barcode: string) => {
-    const local = products.find(p => p.barcode === barcode);
+    const normalizedBarcode = normalizeBarcode(barcode);
+    const local = products.find(p => normalizeBarcode(p.barcode) === normalizedBarcode);
     if (local) {
       if (local.isLoose) { setBarcodeLooseProduct(local); return; }
       pos.addItem(local);
@@ -108,13 +109,13 @@ export default function POSPage() {
       return;
     }
     try {
-      const remote = await getProductByBarcode(barcode);
+      const remote = await getProductByBarcode(normalizedBarcode);
       if (remote) {
         if (remote.isLoose) { setBarcodeLooseProduct(remote); return; }
         pos.addItem(remote);
         toast.success(`Added: ${remote.name}`, { duration: 1000 });
       } else {
-        toast.error(`Barcode not found: ${barcode}`);
+        toast.error(`Barcode not found: ${normalizedBarcode}`);
       }
     } catch {
       toast.error('Barcode lookup failed');

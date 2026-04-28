@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Product, Bill, Customer, SaleReturn } from '@/types';
-import { stripUndefined } from './utils';
+import { normalizeBarcode, stripUndefined } from './utils';
 
 function normalizeSearchText(value?: string | null): string {
   return value?.trim().toLowerCase() ?? '';
@@ -64,7 +64,7 @@ export function subscribeProducts(cb: (products: Product[]) => void) {
 }
 
 export async function getProductByBarcode(barcode: string): Promise<Product | null> {
-  const q = query(collection(db, 'products'), where('barcode', '==', barcode), limit(1));
+  const q = query(collection(db, 'products'), where('barcode', '==', normalizeBarcode(barcode)), limit(1));
   const snap = await getDocs(q);
   if (snap.empty) return null;
   const d = snap.docs[0];
