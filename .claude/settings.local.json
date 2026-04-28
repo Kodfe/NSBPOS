@@ -24,7 +24,12 @@
       "PowerShell(gh api user --jq '{login: .login, email: .email, name: .name}')",
       "PowerShell(Get-Command gh -ErrorAction SilentlyContinue; [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) -split \";\" | Select-String -Pattern \"git|github\" -CaseSensitive:$false)",
       "PowerShell(cd \"C:\\\\Users\\\\saptr\\\\Music\\\\NSB POS\"; git diff origin/main HEAD -- app/pos/page.tsx | Select-Object -First 40)",
-      "PowerShell(Start-Sleep -Seconds 3; Get-Content \"$env:TEMP\\\\git_cred_out.txt\" -ErrorAction SilentlyContinue)"
+      "PowerShell(Start-Sleep -Seconds 3; Get-Content \"$env:TEMP\\\\git_cred_out.txt\" -ErrorAction SilentlyContinue)",
+      "Bash(git add *)",
+      "Bash(git rebase *)",
+      "Bash(GIT_EDITOR=true git rebase --continue)",
+      "Bash(GIT_EDITOR=\"cmd /c exit 0\" git rebase --continue)",
+      "Bash(git -c core.editor=true rebase --continue)"
     ]
   }
 }

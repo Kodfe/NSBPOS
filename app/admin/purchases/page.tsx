@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, X, Check, Eye, Building2, FileText, ShoppingCart, RotateCcw, FileMinus } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Check, Eye, Building2, FileText, ShoppingCart, RotateCcw, FileMinus, Download, IndianRupee } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { Party, PurchaseBill, PurchaseItem, PurchaseOrder, PurchaseReturn, DebitNote } from '@/types';
@@ -252,8 +252,28 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
     finally { setSaving(false); }
   }
 
+  const totalBillValue = bills.reduce((s, b) => s + b.total, 0);
+  const totalBillPaid  = bills.reduce((s, b) => s + b.amountPaid, 0);
+  const totalBillDue   = bills.reduce((s, b) => s + b.balance, 0);
+
   return (
     <>
+      {bills.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+            <p className="text-xs text-gray-500 mb-1">Total Purchase Value</p>
+            <p className="text-lg font-bold text-gray-900">{formatCurrency(totalBillValue)}</p>
+          </div>
+          <div className="bg-green-50 rounded-xl border border-green-100 p-4 shadow-sm">
+            <p className="text-xs text-green-700 mb-1">Total Paid</p>
+            <p className="text-lg font-bold text-green-700">{formatCurrency(totalBillPaid)}</p>
+          </div>
+          <div className="bg-red-50 rounded-xl border border-red-100 p-4 shadow-sm">
+            <p className="text-xs text-red-700 mb-1">Total Outstanding</p>
+            <p className="text-lg font-bold text-red-700">{formatCurrency(totalBillDue)}</p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-500">{bills.length} purchase bills</p>
         <button onClick={openAdd} className="flex items-center gap-1.5 px-4 py-2 bg-saffron-400 hover:bg-saffron-500 text-white font-semibold rounded-xl text-sm transition-colors">
@@ -479,14 +499,78 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
 
 // ── Purchase Orders Tab ───────────────────────────────────────────────────────
 
+function printPurchaseOrder(order: PurchaseOrder) {
+  const win = window.open('', '_blank');
+  if (!win) { toast.error('Allow popups to download / print'); return; }
+  const rows = order.items.map((it, i) => `
+    <tr>
+      <td>${i + 1}</td><td>${it.productName}</td>
+      <td align="right">${it.quantity} ${it.unit}</td>
+      <td align="right">₹${it.purchaseRate.toFixed(2)}</td>
+      <td align="right">${it.gstRate}%</td>
+      <td align="right">₹${it.total.toFixed(2)}</td>
+    </tr>`).join('');
+  const subtotal = order.items.reduce((s, it) => s + it.purchaseRate * it.quantity, 0);
+  const gstTotal = order.items.reduce((s, it) => s + it.gstAmount, 0);
+  const fmt = (d: Date | string) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  win.document.write(`<!DOCTYPE html><html><head><title>PO — ${order.orderNumber}</title>
+<style>
+body{font-family:Arial,sans-serif;padding:32px;max-width:700px;margin:0 auto;color:#1f2937}
+h2{color:#ff9933;margin:0 0 2px;font-size:22px}
+hr{border:none;border-top:1px solid #e5e7eb;margin:14px 0}
+table{width:100%;border-collapse:collapse;margin:12px 0}
+th{background:#f9fafb;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;border-bottom:2px solid #e5e7eb;text-align:left}
+td{padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px}
+.tot td{border:none;padding:3px 10px;font-size:13px}
+.grand td{font-weight:700;font-size:14px;border-top:2px solid #374151;padding-top:8px}
+.btn{padding:9px 22px;background:#ff9933;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;margin-top:20px}
+@media print{.no-print{display:none}}
+</style></head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+  <div><h2>PURCHASE ORDER</h2><p style="margin:0;font-size:13px;color:#6b7280">${order.orderNumber}</p></div>
+  <div style="text-align:right;font-size:12px;color:#6b7280;line-height:2">
+    <div>Date: <strong>${fmt(order.createdAt)}</strong></div>
+    ${order.expectedDate ? `<div>Expected Delivery: <strong>${fmt(order.expectedDate)}</strong></div>` : ''}
+    ${order.dueDate ? `<div>Payment Due: <strong>${fmt(order.dueDate)}</strong></div>` : ''}
+  </div>
+</div>
+<hr/>
+<p style="margin:0 0 14px;font-size:13px"><strong>To:</strong> ${order.partyName}</p>
+<table>
+  <thead><tr><th>#</th><th>Product</th><th align="right">Qty</th><th align="right">Rate</th><th align="right">GST%</th><th align="right">Amount</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<table style="margin-left:auto;width:260px" class="tot">
+  <tr><td>Subtotal</td><td align="right">₹${subtotal.toFixed(2)}</td></tr>
+  <tr><td>Total GST</td><td align="right">₹${gstTotal.toFixed(2)}</td></tr>
+  <tr class="grand"><td>Grand Total</td><td align="right">₹${(order.total || 0).toFixed(2)}</td></tr>
+  ${(order.amountPaid || 0) > 0 ? `<tr><td style="color:#16a34a">Paid</td><td align="right" style="color:#16a34a">₹${(order.amountPaid || 0).toFixed(2)}</td></tr>` : ''}
+  ${(order.balance || 0) > 0 ? `<tr><td style="color:#dc2626">Balance Due</td><td align="right" style="color:#dc2626">₹${(order.balance || 0).toFixed(2)}</td></tr>` : ''}
+</table>
+${order.notes ? `<p style="margin-top:14px;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb;padding-top:12px"><strong>Notes:</strong> ${order.notes}</p>` : ''}
+<p style="margin-top:28px;font-size:11px;color:#9ca3af">Generated by NSB POS · ${new Date().toLocaleDateString('en-IN')}</p>
+<div class="no-print"><button class="btn" onclick="window.print()">Print / Save as PDF</button></div>
+<script>setTimeout(function(){window.print()},350)</script>
+</body></html>`);
+  win.document.close();
+}
+
 function PurchaseOrdersTab({ parties }: { parties: Party[] }) {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [payOrder, setPayOrder] = useState<PurchaseOrder | null>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState<'cash' | 'upi' | 'card' | 'credit'>('cash');
+  const [paying, setPaying] = useState(false);
+
   const [partyId, setPartyId] = useState('');
   const [expectedDate, setExpectedDate] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [amountPaid, setAmountPaid] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'card' | 'credit'>('cash');
   const [items, setItems] = useState<PurchaseItem[]>([emptyItem()]);
 
   useEffect(() => { load(); }, []);
@@ -499,16 +583,59 @@ function PurchaseOrdersTab({ parties }: { parties: Party[] }) {
   }
 
   function openAdd() {
-    setPartyId(parties[0]?.id ?? ''); setExpectedDate(''); setNotes(''); setItems([emptyItem()]); setShowModal(true);
+    setPartyId(parties[0]?.id ?? '');
+    setExpectedDate(''); setDueDate(''); setNotes('');
+    setAmountPaid(''); setPaymentMethod('cash');
+    setItems([emptyItem()]); setShowModal(true);
   }
 
   function updateItem(idx: number, patch: Partial<PurchaseItem>) {
     setItems(prev => prev.map((it, i) => i === idx ? calcItem({ ...it, ...patch }) : it));
   }
 
-  async function handleStatusUpdate(order: PurchaseOrder, status: PurchaseOrder['status']) {
-    try { await updatePurchaseOrder(order.id, { status }); toast.success(`Order marked ${status}`); load(); }
+  const orderSubtotal = items.reduce((s, it) => s + it.purchaseRate * it.quantity, 0);
+  const orderGst      = items.reduce((s, it) => s + it.gstAmount, 0);
+  const orderTotal    = items.reduce((s, it) => s + it.total, 0);
+  const paidAmt       = parseFloat(amountPaid) || 0;
+  const orderBalance  = Math.max(0, orderTotal - paidAmt);
+
+  async function handleDeliveryStatus(order: PurchaseOrder, status: PurchaseOrder['status']) {
+    try { await updatePurchaseOrder(order.id, { status }); toast.success(`Marked ${status}`); load(); }
     catch { toast.error('Update failed'); }
+  }
+
+  async function handlePaymentStatus(order: PurchaseOrder, ps: PurchaseOrder['paymentStatus']) {
+    let paid = order.amountPaid ?? 0;
+    if (ps === 'paid') paid = order.total ?? 0;
+    else if (ps === 'unpaid') paid = 0;
+    try {
+      await updatePurchaseOrder(order.id, {
+        paymentStatus: ps,
+        amountPaid: paid,
+        balance: Math.max(0, (order.total ?? 0) - paid),
+      });
+      toast.success('Payment status updated'); load();
+    } catch { toast.error('Update failed'); }
+  }
+
+  async function handleRecordPayment() {
+    if (!payOrder) return;
+    const amt = parseFloat(payAmount);
+    if (!amt || amt <= 0) { toast.error('Enter a valid amount'); return; }
+    setPaying(true);
+    try {
+      const newPaid    = (payOrder.amountPaid ?? 0) + amt;
+      const newBalance = Math.max(0, (payOrder.total ?? 0) - newPaid);
+      await updatePurchaseOrder(payOrder.id, {
+        amountPaid: newPaid,
+        balance: newBalance,
+        paymentStatus: newBalance <= 0 ? 'paid' : 'partial',
+        paymentMethod: payMethod,
+      });
+      toast.success(`₹${amt.toFixed(2)} recorded`);
+      setPayOrder(null); setPayAmount(''); load();
+    } catch { toast.error('Failed to record payment'); }
+    finally { setPaying(false); }
   }
 
   async function handleSave() {
@@ -517,60 +644,125 @@ function PurchaseOrdersTab({ parties }: { parties: Party[] }) {
     if (validItems.length === 0) { toast.error('Add at least one item'); return; }
     setSaving(true);
     try {
-      const party = parties.find(p => p.id === partyId)!;
-      const snap = await getPurchaseOrders();
-      const orderNumber = `ORD${String(snap.length + 1).padStart(4, '0')}`;
-      await createPurchaseOrder({
+      const party    = parties.find(p => p.id === partyId)!;
+      const existing = await getPurchaseOrders();
+      const orderNumber = `ORD${String(existing.length + 1).padStart(4, '0')}`;
+      const total   = orderTotal;
+      const paid    = paidAmt;
+      const balance = Math.max(0, total - paid);
+      const ps: PurchaseOrder['paymentStatus'] = paid >= total && total > 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid';
+      const orderData: Omit<PurchaseOrder, 'id' | 'createdAt'> = {
         orderNumber, partyId, partyName: party.name,
-        items: validItems,
+        items: validItems, total, amountPaid: paid, balance,
+        paymentStatus: ps,
+        paymentMethod: paid > 0 ? paymentMethod : undefined,
         expectedDate: expectedDate ? new Date(expectedDate) : undefined,
-        status: 'pending', notes: notes || undefined,
-      });
-      toast.success('Purchase order created'); setShowModal(false); load();
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        status: 'pending',
+        notes: notes || undefined,
+      };
+      await createPurchaseOrder(orderData);
+      toast.success('Purchase order created');
+      setShowModal(false);
+      printPurchaseOrder({ ...orderData, id: '', createdAt: new Date() } as PurchaseOrder);
+      load();
     } catch (err: any) { toast.error(`Save failed: ${err?.message ?? 'Check Firestore connection'}`); }
     finally { setSaving(false); }
   }
 
+  const totalValue   = orders.reduce((s, o) => s + (o.total ?? 0), 0);
+  const totalPaid    = orders.reduce((s, o) => s + (o.amountPaid ?? 0), 0);
+  const totalBalance = orders.reduce((s, o) => s + (o.balance ?? 0), 0);
+
   return (
     <>
+      {/* Summary strip */}
+      {orders.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+            <p className="text-xs text-gray-500 mb-1">Total Order Value</p>
+            <p className="text-lg font-bold text-gray-900">{formatCurrency(totalValue)}</p>
+          </div>
+          <div className="bg-green-50 rounded-xl border border-green-100 p-4 shadow-sm">
+            <p className="text-xs text-green-700 mb-1">Total Paid</p>
+            <p className="text-lg font-bold text-green-700">{formatCurrency(totalPaid)}</p>
+          </div>
+          <div className="bg-red-50 rounded-xl border border-red-100 p-4 shadow-sm">
+            <p className="text-xs text-red-700 mb-1">Total Outstanding</p>
+            <p className="text-lg font-bold text-red-700">{formatCurrency(totalBalance)}</p>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-500">{orders.length} orders</p>
         <button onClick={openAdd} className="flex items-center gap-1.5 px-4 py-2 bg-saffron-400 hover:bg-saffron-500 text-white font-semibold rounded-xl text-sm transition-colors">
           <Plus size={14} /> New Order
         </button>
       </div>
+
       {loading ? (
         <div className="text-center py-12 text-gray-400 text-sm">Loading…</div>
       ) : orders.length === 0 ? (
         <div className="flex flex-col items-center py-16 gap-3"><ShoppingCart size={40} className="text-gray-200" /><p className="text-gray-400 text-sm">No purchase orders yet</p></div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
+          <table className="w-full text-sm min-w-[950px]">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
               <tr>
-                <th className="text-left px-5 py-3">Order #</th>
+                <th className="text-left px-4 py-3">Order #</th>
+                <th className="text-left px-4 py-3">Date</th>
                 <th className="text-left px-4 py-3">Party</th>
-                <th className="text-right px-4 py-3">Items</th>
-                <th className="text-left px-4 py-3">Expected</th>
-                <th className="text-center px-4 py-3">Status</th>
+                <th className="text-right px-4 py-3">Total</th>
+                <th className="text-right px-4 py-3">Paid</th>
+                <th className="text-right px-4 py-3">Balance</th>
+                <th className="text-left px-4 py-3">Due Date</th>
+                <th className="text-center px-4 py-3">Payment</th>
+                <th className="text-center px-4 py-3">Delivery</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {orders.map(o => (
                 <tr key={o.id} className="hover:bg-gray-50">
-                  <td className="px-5 py-3 font-mono text-xs font-semibold text-gray-700">{o.orderNumber}</td>
+                  <td className="px-4 py-3 font-mono text-xs font-semibold text-gray-700">{o.orderNumber}</td>
+                  <td className="px-4 py-3 text-gray-500 text-xs">{o.createdAt ? format(o.createdAt, 'dd MMM yyyy') : '—'}</td>
                   <td className="px-4 py-3 font-medium text-gray-800">{o.partyName}</td>
-                  <td className="px-4 py-3 text-right text-gray-600">{o.items.length}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{o.expectedDate ? format(new Date(o.expectedDate), 'dd MMM yyyy') : '—'}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(o.total ?? 0)}</td>
+                  <td className="px-4 py-3 text-right text-green-600">{formatCurrency(o.amountPaid ?? 0)}</td>
+                  <td className="px-4 py-3 text-right text-red-600 font-medium">{formatCurrency(o.balance ?? 0)}</td>
+                  <td className="px-4 py-3 text-gray-500 text-xs">{o.dueDate ? format(new Date(o.dueDate), 'dd MMM yyyy') : '—'}</td>
+                  <td className="px-4 py-3 text-center">
+                    <select
+                      value={o.paymentStatus ?? 'unpaid'}
+                      onChange={e => handlePaymentStatus(o, e.target.value as PurchaseOrder['paymentStatus'])}
+                      className={`text-xs font-medium rounded-lg px-2 py-1 border-0 outline-none cursor-pointer ${
+                        (o.paymentStatus ?? 'unpaid') === 'paid'    ? 'bg-green-100 text-green-700' :
+                        (o.paymentStatus ?? 'unpaid') === 'partial' ? 'bg-amber-100 text-amber-700' :
+                                                                      'bg-red-50 text-red-600'
+                      }`}
+                    >
+                      <option value="unpaid">Unpaid</option>
+                      <option value="partial">Partial Paid</option>
+                      <option value="paid">Paid</option>
+                    </select>
+                  </td>
                   <td className="px-4 py-3 text-center"><StatusBadge status={o.status} /></td>
                   <td className="px-4 py-3">
-                    {o.status === 'pending' && (
-                      <div className="flex items-center gap-1 justify-end">
-                        <button onClick={() => handleStatusUpdate(o, 'received')} className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors">Received</button>
-                        <button onClick={() => handleStatusUpdate(o, 'cancelled')} className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors">Cancel</button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1 justify-end">
+                      <button onClick={() => printPurchaseOrder(o)} title="Download / Print" className="p-1.5 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-lg transition-colors">
+                        <Download size={13} />
+                      </button>
+                      <button onClick={() => { setPayOrder(o); setPayAmount(''); setPayMethod('cash'); }} title="Record Payment" className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
+                        <IndianRupee size={13} />
+                      </button>
+                      {o.status === 'pending' && (
+                        <>
+                          <button onClick={() => handleDeliveryStatus(o, 'received')} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors">Rcvd</button>
+                          <button onClick={() => handleDeliveryStatus(o, 'cancelled')} className="text-xs px-1.5 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors">✕</button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -579,6 +771,7 @@ function PurchaseOrdersTab({ parties }: { parties: Party[] }) {
         </div>
       )}
 
+      {/* ── Create Order Modal ── */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
@@ -595,10 +788,20 @@ function PurchaseOrdersTab({ parties }: { parties: Party[] }) {
                   </select>
                 </div>
                 <div>
-                  <label className="label">Expected Date</label>
+                  <label className="label">Expected Delivery Date</label>
                   <input type="date" value={expectedDate} onChange={e => setExpectedDate(e.target.value)} className="input" />
                 </div>
+                <div>
+                  <label className="label">Payment Due Date</label>
+                  <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="input" />
+                </div>
+                <div>
+                  <label className="label">Notes</label>
+                  <input value={notes} onChange={e => setNotes(e.target.value)} className="input" placeholder="Optional" />
+                </div>
               </div>
+
+              {/* Items */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="label" style={{ marginBottom: 0 }}>Items</label>
@@ -607,15 +810,15 @@ function PurchaseOrdersTab({ parties }: { parties: Party[] }) {
                 <div className="space-y-2">
                   {items.map((it, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-gray-50 rounded-xl p-3">
-                      <div className="col-span-5">
+                      <div className="col-span-4">
                         {idx === 0 && <label className="label">Product</label>}
                         <input value={it.productName} onChange={e => updateItem(idx, { productName: e.target.value })} className="input" placeholder="Product name" />
                       </div>
                       <div className="col-span-2">
                         {idx === 0 && <label className="label">Qty</label>}
-                        <input type="number" value={it.quantity} onChange={e => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })} className="input" min="0" />
+                        <input type="number" value={it.quantity} onChange={e => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })} className="input" min="0" step="0.01" />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         {idx === 0 && <label className="label">Unit</label>}
                         <input value={it.unit} onChange={e => updateItem(idx, { unit: e.target.value })} className="input" placeholder="pc" />
                       </div>
@@ -623,27 +826,99 @@ function PurchaseOrdersTab({ parties }: { parties: Party[] }) {
                         {idx === 0 && <label className="label">Rate (₹)</label>}
                         <input type="number" value={it.purchaseRate} onChange={e => updateItem(idx, { purchaseRate: parseFloat(e.target.value) || 0 })} className="input" min="0" step="0.01" />
                       </div>
-                      <div className="col-span-1 flex items-end">
+                      <div className="col-span-1">
+                        {idx === 0 && <label className="label">GST%</label>}
+                        <select value={it.gstRate} onChange={e => updateItem(idx, { gstRate: parseInt(e.target.value) })} className="input">
+                          {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
+                        </select>
+                      </div>
+                      <div className="col-span-2 flex items-end gap-1">
+                        <div className="flex-1">
+                          {idx === 0 && <label className="label">Total</label>}
+                          <p className="text-sm font-semibold text-gray-800 py-2">{formatCurrency(it.total)}</p>
+                        </div>
                         {items.length > 1 && (
-                          <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                            <X size={14} />
-                          </button>
+                          <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg mb-1"><X size={14} /></button>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="label">Notes</label>
-                <input value={notes} onChange={e => setNotes(e.target.value)} className="input" placeholder="Optional" />
+
+              {/* Order totals + initial payment */}
+              <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                <div className="bg-gray-50 rounded-xl p-4 space-y-1.5 text-sm">
+                  <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(orderSubtotal)}</span></div>
+                  <div className="flex justify-between text-gray-500 text-xs"><span>Total GST</span><span>{formatCurrency(orderGst)}</span></div>
+                  <div className="flex justify-between font-bold text-gray-900 border-t pt-1.5"><span>Grand Total</span><span>{formatCurrency(orderTotal)}</span></div>
+                  <div className="flex justify-between text-green-600"><span>Paid Now</span><span>{formatCurrency(paidAmt)}</span></div>
+                  <div className="flex justify-between text-red-600 font-semibold"><span>Balance Due</span><span>{formatCurrency(orderBalance)}</span></div>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="label">Amount Paid Now (₹)</label>
+                    <input type="number" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} className="input" placeholder="0" min="0" step="0.01" />
+                  </div>
+                  <div>
+                    <label className="label">Payment Method</label>
+                    <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as typeof paymentMethod)} className="input">
+                      <option value="cash">Cash</option>
+                      <option value="upi">UPI</option>
+                      <option value="card">Card</option>
+                      <option value="credit">Credit</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="px-6 pb-6 flex gap-3 border-t pt-4">
               <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-saffron-400 hover:bg-saffron-500 disabled:bg-gray-200 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-colors">
-                {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check size={16} />}
-                Create Order
+                {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Download size={15} />}
+                Create &amp; Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Record Payment Modal ── */}
+      {payOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={e => e.target === e.currentTarget && setPayOrder(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <div>
+                <h2 className="font-bold text-gray-900">Record Payment</h2>
+                <p className="text-xs text-gray-500">{payOrder.orderNumber} · {payOrder.partyName}</p>
+              </div>
+              <button onClick={() => setPayOrder(null)}><X size={18} className="text-gray-400" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-1.5">
+                <div className="flex justify-between text-gray-700"><span>Order Total</span><span className="font-semibold">{formatCurrency(payOrder.total ?? 0)}</span></div>
+                <div className="flex justify-between text-green-600"><span>Already Paid</span><span>{formatCurrency(payOrder.amountPaid ?? 0)}</span></div>
+                <div className="flex justify-between text-red-600 font-bold border-t pt-1.5"><span>Outstanding</span><span>{formatCurrency(payOrder.balance ?? 0)}</span></div>
+              </div>
+              <div>
+                <label className="label">Amount to Pay (₹) *</label>
+                <input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="input" placeholder="0.00" min="0" step="0.01" autoFocus />
+              </div>
+              <div>
+                <label className="label">Payment Method</label>
+                <select value={payMethod} onChange={e => setPayMethod(e.target.value as typeof payMethod)} className="input">
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="card">Card</option>
+                  <option value="credit">Credit</option>
+                </select>
+              </div>
+            </div>
+            <div className="px-6 pb-6 flex gap-3">
+              <button onClick={() => setPayOrder(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleRecordPayment} disabled={paying} className="flex-1 py-2.5 bg-green-500 hover:bg-green-600 disabled:bg-gray-200 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-colors">
+                {paying ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check size={16} />}
+                Record Payment
               </button>
             </div>
           </div>

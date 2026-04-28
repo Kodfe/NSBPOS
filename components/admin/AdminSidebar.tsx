@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Package, Monitor, Users, FileText,
   Store, ShoppingCart, LogOut, ChevronRight, Settings,
-  UserCircle, Tag, Receipt, ShoppingBag,
+  UserCircle, Tag, Receipt, ShoppingBag, BarChart2,
 } from 'lucide-react';
 
 const NAV = [
@@ -14,6 +14,7 @@ const NAV = [
   { href: '/admin/customers',  label: 'Customers',    icon: UserCircle,      desc: 'Customer accounts',      group: '' },
   { href: '/admin/bills',      label: 'Bills',        icon: Receipt,         desc: 'View & search bills',    group: '' },
   { href: '/admin/purchases',  label: 'Purchases',    icon: ShoppingBag,     desc: 'Vendors & purchase bills', group: 'purchase' },
+  { href: '/admin/reports',    label: 'Reports',      icon: BarChart2,       desc: 'P&L & GST compliance',    group: 'purchase' },
   { href: '/admin/machines',   label: 'POS Machines', icon: Monitor,         desc: 'Counters & sessions',    group: 'ops' },
   { href: '/admin/operators',  label: 'Operators',    icon: Users,           desc: 'Staff & PINs',           group: 'ops' },
   { href: '/admin/logs',       label: 'Machine Logs', icon: FileText,        desc: 'Start / stop history',   group: 'ops' },

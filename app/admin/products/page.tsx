@@ -3,43 +3,50 @@ import { useState, useEffect, useRef } from 'react';
 import { Plus, Search, Download, Upload, Pencil, Trash2, Scale, Package, X, Check, AlertTriangle, FileText } from 'lucide-react';
 import Papa from 'papaparse';
 import toast, { Toaster } from 'react-hot-toast';
-import { Product } from '@/types';
-import { DEMO_PRODUCTS, CATEGORIES } from '@/lib/demo-data';
+import { Product, Category } from '@/types';
 import { getAllProducts, adminAddProduct, adminUpdateProduct, adminDeleteProduct, bulkUpsertProducts } from '@/lib/admin-firestore';
+import { getCategories } from '@/lib/categories-firestore';
 
 const UNITS = ['piece', 'kg', 'gm', 'ltr', 'ml', 'pack', 'dozen', 'box', 'bottle'];
 const GST_RATES = [0, 5, 12, 18, 28];
-const EMPTY: Omit<Product, 'id'> = {
-  name: '', barcode: '', price: 0, mrp: 0, gstRate: 0, hsnCode: '',
-  category: 'Essentials', unit: 'piece', stock: 0, minStock: 5,
-  brand: '', isActive: true, isLoose: false,
-};
+
+function emptyProduct(categories: Category[]): Omit<Product, 'id'> {
+  return {
+    name: '', barcode: '', price: 0, mrp: 0, purchasePrice: 0, gstRate: 0, hsnCode: '',
+    category: categories[0]?.name || '', unit: 'piece', stock: 0, minStock: 5,
+    brand: '', isActive: true, isLoose: false,
+  };
+}
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('All');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
-  const [form, setForm] = useState<Omit<Product, 'id'>>(EMPTY);
+  const [form, setForm] = useState<Omit<Product, 'id'>>(emptyProduct([]));
   const [saving, setSaving] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [bulkRows, setBulkRows] = useState<Omit<Product, 'id'>[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { loadProducts(); }, []);
+  useEffect(() => {
+    loadProducts();
+    getCategories().then(setCategories);
+  }, []);
 
   async function loadProducts() {
     try {
       const data = await getAllProducts();
-      setProducts(data.length ? data : DEMO_PRODUCTS);
+      setProducts(data);
     } catch {
-      setProducts(DEMO_PRODUCTS);
+      setProducts([]);
     }
   }
 
-  function openAdd() { setEditing(null); setForm(EMPTY); setShowModal(true); }
+  function openAdd() { setEditing(null); setForm(emptyProduct(categories)); setShowModal(true); }
   function openEdit(p: Product) { setEditing(p); setForm({ ...p }); setShowModal(true); }
 
   async function handleSave() {
@@ -69,9 +76,9 @@ export default function ProductsPage() {
 
   function exportCSV() {
     const rows = [
-      ['name', 'barcode', 'price', 'mrp', 'gstRate', 'hsnCode', 'category', 'unit', 'stock', 'minStock', 'brand', 'isLoose', 'isActive'],
+      ['name', 'barcode', 'price', 'mrp', 'purchasePrice', 'gstRate', 'hsnCode', 'category', 'unit', 'stock', 'minStock', 'brand', 'isLoose', 'isActive'],
       ...products.map(p => [
-        p.name, p.barcode || '', p.price, p.mrp, p.gstRate, p.hsnCode || '',
+        p.name, p.barcode || '', p.price, p.mrp, p.purchasePrice ?? 0, p.gstRate, p.hsnCode || '',
         p.category, p.unit, p.stock, p.minStock || 5, p.brand || '',
         p.isLoose ? 'TRUE' : 'FALSE', p.isActive ? 'TRUE' : 'FALSE',
       ]),
@@ -85,9 +92,9 @@ export default function ProductsPage() {
 
   function downloadTemplate() {
     const rows = [
-      ['name', 'barcode', 'price', 'mrp', 'gstRate', 'hsnCode', 'category', 'unit', 'stock', 'minStock', 'brand', 'isLoose', 'isActive'],
-      ['Amul Milk 1L', '8901063011083', '68', '68', '5', '0401', 'Dairy', 'ltr', '50', '5', 'Amul', 'FALSE', 'TRUE'],
-      ['Onion', 'L001', '35', '35', '0', '0703', 'Loose', 'kg', '100', '10', '', 'TRUE', 'TRUE'],
+      ['name', 'barcode', 'price', 'mrp', 'purchasePrice', 'gstRate', 'hsnCode', 'category', 'unit', 'stock', 'minStock', 'brand', 'isLoose', 'isActive'],
+      ['Amul Milk 1L', '8901063011083', '68', '68', '60', '5', '0401', 'Dairy', 'ltr', '50', '5', 'Amul', 'FALSE', 'TRUE'],
+      ['Onion', 'L001', '35', '35', '28', '0', '0703', 'Loose', 'kg', '100', '10', '', 'TRUE', 'TRUE'],
     ];
     const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
     const a = document.createElement('a');
@@ -109,6 +116,7 @@ export default function ProductsPage() {
           barcode: row.barcode || '',
           price: parseFloat(row.price) || 0,
           mrp: parseFloat(row.mrp) || 0,
+          purchasePrice: parseFloat(row.purchasePrice) || 0,
           gstRate: parseFloat(row.gstRate) || 0,
           hsnCode: row.hsnCode || '',
           category: row.category || 'Essentials',
@@ -188,7 +196,7 @@ export default function ProductsPage() {
             className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-saffron-400" />
         </div>
         <div className="flex gap-1.5 overflow-x-auto">
-          {CATEGORIES.map(c => (
+          {['All', ...categories.map(c => c.name)].map(c => (
             <button key={c} onClick={() => setCatFilter(c)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${catFilter === c ? 'bg-saffron-400 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
               {c}
@@ -297,6 +305,11 @@ export default function ProductsPage() {
                     className="input" />
                 </div>
                 <div>
+                  <label className="label" style={{ color: '#9ca3af' }}>Purchase / Cost Price (₹) <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>— internal only</span></label>
+                  <input type="number" value={form.purchasePrice ?? 0} onChange={e => setForm(f => ({ ...f, purchasePrice: parseFloat(e.target.value) || 0 }))}
+                    className="input" placeholder="0" style={{ borderColor: '#f3f4f6', background: '#fafafa' }} />
+                </div>
+                <div>
                   <label className="label">GST Rate</label>
                   <select value={form.gstRate} onChange={e => setForm(f => ({ ...f, gstRate: parseInt(e.target.value) }))} className="input">
                     {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
@@ -310,7 +323,7 @@ export default function ProductsPage() {
                 <div>
                   <label className="label">Category</label>
                   <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className="input">
-                    {CATEGORIES.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)}
+                    {categories.map(c => <option key={c.id} value={c.name}>{c.icon} {c.name}</option>)}
                   </select>
                 </div>
                 <div>

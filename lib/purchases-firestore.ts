@@ -102,7 +102,19 @@ export async function getPurchaseOrders(): Promise<PurchaseOrder[]> {
   try {
     const snap = await getDocs(query(collection(db, 'purchaseOrders'), limit(100)));
     return snap.docs
-      .map(d => ({ id: d.id, ...d.data(), createdAt: toDate(d.data().createdAt) } as PurchaseOrder))
+      .map(d => {
+        const data = d.data();
+        return {
+          id: d.id, ...data,
+          createdAt: toDate(data.createdAt),
+          expectedDate: toDate(data.expectedDate),
+          dueDate: toDate(data.dueDate),
+          total: data.total ?? 0,
+          amountPaid: data.amountPaid ?? 0,
+          balance: data.balance ?? 0,
+          paymentStatus: data.paymentStatus ?? 'unpaid',
+        } as PurchaseOrder;
+      })
       .sort((a, b) => (b.createdAt?.getTime?.() ?? 0) - (a.createdAt?.getTime?.() ?? 0));
   } catch {
     return [];

@@ -1,24 +1,18 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { Search, ScanBarcode, Scale } from 'lucide-react';
-import { Product } from '@/types';
-import { CATEGORIES } from '@/lib/demo-data';
+import { Product, Category } from '@/types';
 import WeightModal from './WeightModal';
 
 interface Props {
   products: Product[];
+  categories: Category[];
   onAddItem: (product: Product) => void;
   onAddLooseItem: (product: Product, weightKg: number) => void;
   onBarcodeSearch: (barcode: string) => void;
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-  All: '🛒', Loose: '⚖️', Dairy: '🥛', Grains: '🌾', Oil: '🫙', Essentials: '🧂',
-  'Instant Food': '🍜', 'Personal Care': '🧴', Household: '🧹',
-  Biscuits: '🍪', Snacks: '🍟', Beverages: '🥤', Vegetables: '🥦', Fruits: '🍎',
-};
-
-export default function ProductSearch({ products, onAddItem, onAddLooseItem, onBarcodeSearch }: Props) {
+export default function ProductSearch({ products, categories, onAddItem, onAddLooseItem, onBarcodeSearch }: Props) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [weightProduct, setWeightProduct] = useState<Product | null>(null);
@@ -27,6 +21,9 @@ export default function ProductSearch({ products, onAddItem, onAddLooseItem, onB
   useEffect(() => {
     searchRef.current?.focus();
   }, []);
+
+  const iconMap = Object.fromEntries(categories.map(c => [c.name, c.icon ?? '📦']));
+  const allTabs = [{ name: 'All', icon: '🛒' }, ...categories];
 
   const handleSearchChange = (val: string) => {
     setSearch(val);
@@ -70,17 +67,17 @@ export default function ProductSearch({ products, onAddItem, onAddLooseItem, onB
 
       {/* Category tabs */}
       <div className="flex gap-1.5 px-3 py-2 bg-white border-b border-gray-100 overflow-x-auto scrollbar-thin">
-        {CATEGORIES.map(cat => (
+        {allTabs.map(cat => (
           <button
-            key={cat}
-            onClick={() => setCategory(cat)}
+            key={cat.name}
+            onClick={() => setCategory(cat.name)}
             className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
-              category === cat
+              category === cat.name
                 ? 'bg-saffron-400 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-saffron-50 hover:text-saffron-700'
             }`}
           >
-            <span>{CATEGORY_ICONS[cat] || '📦'}</span> {cat}
+            <span>{cat.icon}</span> {cat.name}
           </button>
         ))}
       </div>
@@ -95,7 +92,7 @@ export default function ProductSearch({ products, onAddItem, onAddLooseItem, onB
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
             {filtered.map(product => (
-              <ProductCard key={product.id} product={product} onClick={handleProductClick} />
+              <ProductCard key={product.id} product={product} iconMap={iconMap} onClick={handleProductClick} />
             ))}
           </div>
         )}
@@ -113,7 +110,7 @@ export default function ProductSearch({ products, onAddItem, onAddLooseItem, onB
   );
 }
 
-function ProductCard({ product, onClick }: { product: Product; onClick: (p: Product) => void }) {
+function ProductCard({ product, iconMap, onClick }: { product: Product; iconMap: Record<string, string>; onClick: (p: Product) => void }) {
   const isLowStock = product.stock <= (product.minStock || 5);
   const isOutOfStock = product.stock === 0;
   const isLoose = product.isLoose === true;
@@ -151,7 +148,7 @@ function ProductCard({ product, onClick }: { product: Product; onClick: (p: Prod
 
       {/* Icon */}
       <div className={`text-2xl mb-1.5 ${isLoose ? 'mt-4' : ''}`}>
-        {CATEGORY_ICONS[product.category] || '📦'}
+        {iconMap[product.category] || '📦'}
       </div>
 
       <p className="text-xs font-semibold text-gray-800 leading-tight line-clamp-2 mb-1">{product.name}</p>

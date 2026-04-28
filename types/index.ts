@@ -4,6 +4,7 @@ export interface Product {
   barcode?: string;
   price: number;
   mrp: number;
+  purchasePrice?: number; // cost price — hidden from POS, used for P&L reports
   gstRate: number; // 0, 5, 12, 18, 28
   hsnCode?: string;
   category: string;
@@ -245,7 +246,13 @@ export interface PurchaseOrder {
   partyId: string;
   partyName: string;
   items: PurchaseItem[];
+  total: number;
+  amountPaid: number;
+  balance: number;
+  paymentStatus: 'unpaid' | 'partial' | 'paid';
+  paymentMethod?: 'cash' | 'upi' | 'card' | 'credit';
   expectedDate?: Date;
+  dueDate?: Date;
   status: 'pending' | 'received' | 'cancelled';
   notes?: string;
   createdAt: Date;

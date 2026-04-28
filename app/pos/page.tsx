@@ -16,16 +16,16 @@ import BillSearchModal from '@/components/pos/BillSearchModal';
 import ReturnModal from '@/components/pos/ReturnModal';
 
 import { usePOS } from '@/hooks/usePOS';
-import { DEMO_PRODUCTS } from '@/lib/demo-data';
-import { getProductByBarcode, generateBillNumber } from '@/lib/firestore';
+import { getProductByBarcode, generateBillNumber, subscribeProducts } from '@/lib/firestore';
 import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
 import { addStoreCredit, updateCustomerStats } from '@/lib/customers-firestore';
 import { cancelBill, returnStock, markBillAsAdjusted } from '@/lib/firestore';
-import { db } from '@/lib/firebase';
-import { Bill, PaymentDetails, Product, StoreSettings } from '@/types';
+import { getCategories } from '@/lib/categories-firestore';
+import { Bill, PaymentDetails, Product, Category, StoreSettings } from '@/types';
 
 export default function POSPage() {
-  const [products, setProducts] = useState<Product[]>(DEMO_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [online, setOnline] = useState(true);
   const [time, setTime] = useState<Date>(() => new Date());
   const [showPayment, setShowPayment] = useState(false);
@@ -43,6 +43,17 @@ export default function POSPage() {
   // Load store settings
   useEffect(() => {
     loadSettings().then(s => setStoreSettings(s));
+  }, []);
+
+  // Subscribe to live products from Firestore
+  useEffect(() => {
+    const unsub = subscribeProducts(setProducts);
+    return unsub;
+  }, []);
+
+  // Load categories from Firestore
+  useEffect(() => {
+    getCategories().then(setCategories);
   }, []);
 
   // Clock
@@ -237,6 +248,7 @@ export default function POSPage() {
         <div className="flex-1 flex flex-col overflow-hidden border-r border-gray-200">
           <ProductSearch
             products={products}
+            categories={categories}
             onAddItem={item => { pos.addItem(item); toast.success(`Added: ${item.name}`, { duration: 1000 }); }}
             onAddLooseItem={(product, weight) => {
               pos.addLooseItem(product, weight);
@@ -274,7 +286,7 @@ export default function POSPage() {
 
       {/* Bottom status bar */}
       <div className="bg-white border-t border-gray-200 px-4 py-1.5 flex items-center justify-between text-xs text-gray-400 flex-shrink-0">
-        <span>Cashier: Admin &nbsp;|&nbsp; {products.length} products loaded</span>
+        <span>{storeSettings.storeName} &nbsp;|&nbsp; {products.length} products loaded</span>
         <span className="flex items-center gap-1">
           {online ? <span className="text-green-500">● Online</span> : <span className="text-red-400">● Offline</span>}
           &nbsp;|&nbsp; Press F1 for shortcuts

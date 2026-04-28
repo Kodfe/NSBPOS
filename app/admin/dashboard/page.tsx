@@ -8,12 +8,11 @@ import {
   IndianRupee, ShoppingCart, Receipt, TrendingUp, Calendar,
   Download, RefreshCw, Banknote, Smartphone, CreditCard, Package,
 } from 'lucide-react';
-import { format, subDays, startOfDay, endOfDay, startOfMonth, subMonths } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import StatsCard from '@/components/admin/StatsCard';
 import { getSalesSummary } from '@/lib/admin-firestore';
-import { db } from '@/lib/firebase';
-import { SalesSummary } from '@/types';
-import { DEMO_PRODUCTS } from '@/lib/demo-data';
+import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
+import { SalesSummary, StoreSettings } from '@/types';
 
 type Range = 'today' | 'yesterday' | '7days' | '30days' | 'custom';
 
@@ -34,51 +33,24 @@ function getRange(range: Range, customFrom: string, customTo: string): { from: D
   }
 }
 
-// ── Demo fallback data ────────────────────────────────────────────────────────
-function demoSummary(range: Range): SalesSummary {
-  const days = range === 'today' || range === 'yesterday' ? 1 : range === '7days' ? 7 : 30;
-  const mult = days;
-  const dailyBreakdown = Array.from({ length: days }, (_, i) => ({
-    date: format(subDays(new Date(), days - 1 - i), 'yyyy-MM-dd'),
-    sales: Math.round(4000 + Math.random() * 6000),
-    bills: Math.round(20 + Math.random() * 40),
-  }));
-  const totalSales = dailyBreakdown.reduce((s, d) => s + d.sales, 0);
-  const totalBills = dailyBreakdown.reduce((s, d) => s + d.bills, 0);
-  return {
-    totalSales, totalBills,
-    totalItems: totalBills * 4,
-    cashSales: totalSales * 0.5,
-    upiSales: totalSales * 0.35,
-    cardSales: totalSales * 0.15,
-    totalGst: totalSales * 0.05,
-    totalDiscount: totalSales * 0.02,
-    avgBillValue: totalBills > 0 ? totalSales / totalBills : 0,
-    topProducts: DEMO_PRODUCTS.slice(0, 8).map(p => ({
-      name: p.name.length > 20 ? p.name.slice(0, 20) + '…' : p.name,
-      qty: Math.round(5 + Math.random() * 50 * mult),
-      revenue: Math.round(p.price * (5 + Math.random() * 50) * mult),
-    })).sort((a, b) => b.revenue - a.revenue),
-    dailyBreakdown,
-  };
-}
-
 export default function DashboardPage() {
   const [range, setRange] = useState<Range>('today');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  const [storeSettings, setStoreSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
+
+  useEffect(() => { loadSettings().then(setStoreSettings); }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const { from, to } = getRange(range, customFrom, customTo);
       const data = await getSalesSummary(from, to);
-      // If no real bills yet, show demo data
-      setSummary(data.totalBills === 0 ? demoSummary(range) : data);
+      setSummary(data);
     } catch {
-      setSummary(demoSummary(range));
+      setSummary(null);
     } finally {
       setLoading(false);
     }
@@ -127,7 +99,7 @@ export default function DashboardPage() {
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div>
           <h1 className="text-lg font-bold text-gray-900">Sales Dashboard</h1>
-          <p className="text-xs text-gray-500">{rangeLabel} overview — NSB Supermarket</p>
+          <p className="text-xs text-gray-500">{rangeLabel} overview — {storeSettings.storeName}</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
