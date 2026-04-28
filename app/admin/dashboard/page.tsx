@@ -12,6 +12,7 @@ import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import StatsCard from '@/components/admin/StatsCard';
 import { getSalesSummary } from '@/lib/admin-firestore';
 import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
+import { db } from '@/lib/firebase';
 import { SalesSummary, StoreSettings } from '@/types';
 
 type Range = 'today' | 'yesterday' | '7days' | '30days' | 'custom';

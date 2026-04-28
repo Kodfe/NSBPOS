@@ -18,6 +18,7 @@ import ReturnModal from '@/components/pos/ReturnModal';
 import { usePOS } from '@/hooks/usePOS';
 import { getProductByBarcode, generateBillNumber, subscribeProducts } from '@/lib/firestore';
 import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
+import { db } from '@/lib/firebase';
 import { addStoreCredit, updateCustomerStats } from '@/lib/customers-firestore';
 import { cancelBill, returnStock, markBillAsAdjusted } from '@/lib/firestore';
 import { getCategories } from '@/lib/categories-firestore';
