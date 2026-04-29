@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   showGstOnBill: true,
   showSavings: true,
   footerMessage: 'Thank you for shopping with us!',
+  receiptTerms: '',
   signatureImage: '',
 };
 

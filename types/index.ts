@@ -132,6 +132,7 @@ export interface StoreSettings {
   showGstOnBill: boolean;      // print the GST breakdown section
   showSavings: boolean;        // print "You Saved ₹X" line
   footerMessage: string;
+  receiptTerms?: string;
   signatureImage?: string;      // data URL used on purchase/receipt signatures
   updatedAt?: Date;
 }
@@ -213,9 +214,9 @@ export interface PurchaseItem {
   quantity: number;
   unit: string;
   purchaseRate: number;    // price we paid
+  sellingPrice?: number;   // actual sales price to update the product, hidden from purchase PDF
   mrp: number;
   discountAmount?: number;
-  totalDiscountExclTax?: number;
   gstRate: number;
   gstAmount: number;
   total: number;

@@ -132,6 +132,11 @@ export default function SettingsPage() {
               <input value={form.footerMessage} onChange={e => set('footerMessage', e.target.value)}
                 className="input" placeholder="Thank you for shopping with us!" />
             </div>
+            <div className="col-span-2">
+              <Label>Terms</Label>
+              <textarea value={form.receiptTerms || ''} onChange={e => set('receiptTerms', e.target.value)}
+                className="input min-h-20 resize-none" placeholder="Exchange, return, warranty or store terms printed on POS bill" />
+            </div>
           </div>
         </Section>
 
@@ -268,6 +273,11 @@ export default function SettingsPage() {
             <div className="border-t border-dashed border-gray-400 mt-2 pt-1 text-gray-400 text-[10px]">
               Bill No: NSB260423-0001 &nbsp;&nbsp; 23/04/26 14:30
             </div>
+            {form.receiptTerms && (
+              <div className="border-t border-dashed border-gray-300 mt-2 pt-1 text-[10px] whitespace-pre-line">
+                {form.receiptTerms}
+              </div>
+            )}
             {form.signatureImage && (
               <div className="mt-3 flex justify-end">
                 <div className="text-center">

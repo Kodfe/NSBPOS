@@ -249,6 +249,9 @@ export default function ReceiptModal({ bill, settings = DEFAULT_SETTINGS, onClos
             {/* ── Footer ── */}
             <div className="text-center mt-3 text-gray-400 text-[10px]">
               <div>{settings.footerMessage || 'Thank you for shopping!'}</div>
+              {settings.receiptTerms && (
+                <div className="mt-1 whitespace-pre-line text-gray-500">{settings.receiptTerms}</div>
+              )}
               <div className="mt-0.5">Powered by NSB POS</div>
             </div>
           </div>
