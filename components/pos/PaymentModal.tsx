@@ -44,7 +44,8 @@ export default function PaymentModal({
   const isValid =
     isRefund || isNoChange ||
     (method === 'upi' ? true : method === 'card' ? true : cashAmount >= collectAmount);
-  const canSaveCredit = method === 'cash' && change > 0 && hasCustomer;
+  const hasCashChange = method === 'cash' && change > 0;
+  const canSaveCredit = hasCashChange && hasCustomer;
 
   // ── Confirm ──────────────────────────────────────────────────────────────────
   function handleConfirm() {

@@ -28,7 +28,7 @@ export default function WeightModal({ product, currentWeight, onConfirm, onClose
       if (e.key === 'Escape') onClose();
       else if (e.key === 'Enter') {
         const w = parseFloat(input);
-        if (w > 0 && w <= product.stock) onConfirm(w);
+        if (w > 0) onConfirm(w);
       } else if (e.key === 'Backspace') {
         setInput(s => s.slice(0, -1));
       } else if (/^[0-9.]$/.test(e.key)) {
@@ -61,8 +61,9 @@ export default function WeightModal({ product, currentWeight, onConfirm, onClose
 
   const weight = parseFloat(input) || 0;
   const total = weight * product.price;
-  const exceedsStock = weight > product.stock;
-  const isValid = weight > 0 && !exceedsStock;
+  const willGoNegativeBy = Math.max(0, weight - product.stock);
+  const exceedsStock = false;
+  const isValid = weight > 0;
 
   return (
     <div
@@ -91,20 +92,20 @@ export default function WeightModal({ product, currentWeight, onConfirm, onClose
         {/* Weight display */}
         <div className="px-5 pt-4 pb-2">
           <div className={`flex items-center justify-between rounded-xl px-4 py-3 border-2 transition-colors ${
-            exceedsStock ? 'bg-red-50 border-red-300' :
+            willGoNegativeBy > 0 ? 'bg-red-50 border-red-300' :
             weight > 0 ? 'bg-saffron-50 border-saffron-300' : 'bg-gray-50 border-gray-200'
           }`}>
             <div className="flex items-baseline gap-1">
-              <span className={`text-4xl font-bold font-mono tracking-tight ${exceedsStock ? 'text-red-600' : 'text-gray-900'}`}>
+              <span className={`text-4xl font-bold font-mono tracking-tight ${willGoNegativeBy > 0 ? 'text-red-600' : 'text-gray-900'}`}>
                 {input || '0'}
               </span>
               <span className="text-xl text-gray-400">kg</span>
             </div>
             <div className="text-right">
-              <p className={`text-xl font-bold ${exceedsStock ? 'text-red-500' : 'text-saffron-600'}`}>
+              <p className={`text-xl font-bold ${willGoNegativeBy > 0 ? 'text-red-500' : 'text-saffron-600'}`}>
                 ₹{total.toFixed(2)}
               </p>
-              {exceedsStock && <p className="text-[11px] text-red-500 font-medium">Exceeds stock!</p>}
+              {willGoNegativeBy > 0 && <p className="text-[11px] text-red-500 font-medium">Will be -{willGoNegativeBy.toFixed(3)} kg</p>}
             </div>
           </div>
         </div>

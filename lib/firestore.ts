@@ -89,7 +89,7 @@ export async function updateStock(id: string, quantitySold: number): Promise<voi
   const snap = await getDoc(ref);
   if (snap.exists()) {
     const current = snap.data().stock || 0;
-    await updateDoc(ref, { stock: Math.max(0, current - quantitySold), updatedAt: serverTimestamp() });
+    await updateDoc(ref, { stock: current - quantitySold, updatedAt: serverTimestamp() });
   }
 }
 

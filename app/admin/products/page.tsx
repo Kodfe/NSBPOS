@@ -223,6 +223,7 @@ export default function ProductsPage() {
           <tbody className="bg-white divide-y divide-gray-50">
             {filtered.map(p => {
               const lowStock = p.stock <= (p.minStock || 5);
+              const negativeStock = p.stock < 0;
               return (
                 <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-5 py-3">
@@ -239,9 +240,10 @@ export default function ProductsPage() {
                   <td className="px-4 py-3 text-right text-gray-400">₹{p.mrp}</td>
                   <td className="px-4 py-3 text-right text-gray-500">{p.gstRate}%</td>
                   <td className="px-4 py-3 text-right">
-                    <span className={`font-medium ${lowStock ? 'text-red-500' : 'text-green-600'}`}>
+                    <span className={`font-medium ${negativeStock ? 'text-red-600' : lowStock ? 'text-red-500' : 'text-green-600'}`}>
                       {p.stock} {p.unit}
                     </span>
+                    {negativeStock && <span className="ml-1 text-[10px] font-semibold text-red-600">NEG</span>}
                     {lowStock && <AlertTriangle size={12} className="inline ml-1 text-amber-500" />}
                   </td>
                   <td className="px-4 py-3 text-center">

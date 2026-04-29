@@ -1475,7 +1475,9 @@ function PurchaseOrdersTab({ parties }: { parties: Party[] }) {
                       </div>
                       <div className="col-span-1">
                         {idx === 0 && <label className="label">Unit</label>}
-                        <input value={it.unit} onChange={e => updateItem(idx, { unit: e.target.value })} className="input" placeholder="pc" />
+                        <select value={it.unit} onChange={e => updateItem(idx, { unit: e.target.value })} className="input">
+                          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
                       </div>
                       <div className="col-span-2">
                         {idx === 0 && <label className="label">Rate (₹)</label>}

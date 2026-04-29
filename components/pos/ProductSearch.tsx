@@ -142,37 +142,40 @@ export default function ProductSearch({ products, categories, onAddItem, onAddLo
 
 function ProductCard({ product, iconMap, onClick }: { product: Product; iconMap: Record<string, string>; onClick: (p: Product) => void }) {
   const isLowStock = product.stock <= (product.minStock || 5);
-  const isOutOfStock = product.stock === 0;
+  const isNegativeStock = product.stock < 0;
+  const isZeroStock = product.stock === 0;
   const isLoose = product.isLoose === true;
 
   return (
     <button
-      onClick={() => !isOutOfStock && onClick(product)}
-      disabled={isOutOfStock}
+      onClick={() => onClick(product)}
       className={`relative flex flex-col p-3 bg-white rounded-xl border-2 text-left transition-all hover:shadow-md active:scale-[0.97] ${
-        isOutOfStock
-          ? 'border-gray-100 opacity-50 cursor-not-allowed'
+        isNegativeStock
+          ? 'border-red-200 hover:border-red-300 cursor-pointer'
           : isLoose
           ? 'border-amber-100 hover:border-amber-300 cursor-pointer'
           : 'border-gray-100 hover:border-saffron-300 cursor-pointer'
       }`}
     >
       {/* Loose badge */}
-      {isLoose && !isOutOfStock && (
+      {isLoose && (
         <span className="absolute top-1.5 left-1.5 flex items-center gap-0.5 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">
           <Scale size={9} /> Loose
         </span>
       )}
 
       {/* Stock badge */}
-      {isLowStock && !isOutOfStock && (
+      {isNegativeStock ? (
+        <span className="absolute top-1.5 right-1.5 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">
+          Negative
+        </span>
+      ) : isZeroStock ? (
+        <span className="absolute top-1.5 right-1.5 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+          Zero
+        </span>
+      ) : isLowStock && (
         <span className="absolute top-1.5 right-1.5 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">
           Low
-        </span>
-      )}
-      {isOutOfStock && (
-        <span className="absolute top-1.5 right-1.5 text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full">
-          Out
         </span>
       )}
 
@@ -200,13 +203,13 @@ function ProductCard({ product, iconMap, onClick }: { product: Product; iconMap:
       <div className="flex items-center justify-between mt-1 pt-1 border-t border-gray-50">
         {isLoose ? (
           <span className={`text-[10px] font-medium ${
-            isOutOfStock ? 'text-gray-400' : isLowStock ? 'text-red-500' : 'text-green-600'
+            isNegativeStock ? 'text-red-600' : isZeroStock || isLowStock ? 'text-red-500' : 'text-green-600'
           }`}>
             Stock: {product.stock} kg
           </span>
         ) : (
           <span className={`text-[10px] font-medium ${
-            isOutOfStock ? 'text-gray-400' : isLowStock ? 'text-red-500' : 'text-green-600'
+            isNegativeStock ? 'text-red-600' : isZeroStock || isLowStock ? 'text-red-500' : 'text-green-600'
           }`}>
             Stock: {product.stock} {product.unit}
           </span>

@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Tag, AlertCircle, CreditCard } from 'lucide-react';
+import { ChevronDown, ChevronUp, Tag, AlertCircle, CreditCard, X } from 'lucide-react';
 import { Customer } from '@/types';
 
 interface Props {
@@ -38,6 +38,8 @@ export default function AdjustmentPanel({
   const [creditInput, setCreditInput] = useState('');
 
   const availableCredit = customer?.storeCredit ?? 0;
+  const hasAdjustedDiscount = adjustment < 0;
+  const hasAdjustedDue = adjustment > 0;
 
   function applyDiscount() {
     const val = parseFloat(discountInput) || 0;
@@ -84,11 +86,20 @@ export default function AdjustmentPanel({
 
       {/* Applied summary (always visible if something is applied) */}
       {(adjustment !== 0 || storeCreditApplied > 0) && (
-        <div className="px-4 pb-2 space-y-0.5">
+        <div className="px-4 pb-2 space-y-1">
           {adjustment !== 0 && (
-            <div className={`flex justify-between text-xs font-medium ${adjustment < 0 ? 'text-green-700' : 'text-red-600'}`}>
-              <span>{adjustmentNote || (adjustment < 0 ? 'Discount' : 'Due')}</span>
-              <span>{adjustment < 0 ? '-' : '+'}&#8377;{Math.abs(adjustment).toFixed(2)}</span>
+            <div className={`flex items-center justify-between gap-2 text-xs font-medium ${adjustment < 0 ? 'text-green-700' : 'text-red-600'}`}>
+              <span className="min-w-0 truncate">{adjustmentNote || (adjustment < 0 ? 'Discount' : 'Due')}</span>
+              <span className="flex items-center gap-1">
+                {adjustment < 0 ? '-' : '+'}&#8377;{Math.abs(adjustment).toFixed(2)}
+                <button
+                  onClick={() => onAdjustmentChange(0, '')}
+                  className="p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50"
+                  title={adjustment < 0 ? 'Remove adjusted discount' : 'Remove adjusted due'}
+                >
+                  <X size={12} />
+                </button>
+              </span>
             </div>
           )}
           {storeCreditApplied > 0 && (
@@ -105,9 +116,16 @@ export default function AdjustmentPanel({
 
           {/* ── Section 1: Discount ── */}
           <div className="pt-3">
-            <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold text-gray-600 uppercase tracking-wide">
-              <Tag size={12} />
-              <span>Discount</span>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                <Tag size={12} />
+                <span>Discount</span>
+              </div>
+              {hasAdjustedDiscount && (
+                <button onClick={() => onAdjustmentChange(0, '')} className="text-[11px] text-red-500 hover:underline">
+                  Remove
+                </button>
+              )}
             </div>
             <div className="flex gap-3 mb-2">
               <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
@@ -159,9 +177,16 @@ export default function AdjustmentPanel({
 
           {/* ── Section 2: Old Due / Recovery ── */}
           <div className="border-t border-gray-200 pt-3">
-            <div className="flex items-center gap-1.5 mb-1 text-xs font-semibold text-gray-600 uppercase tracking-wide">
-              <AlertCircle size={12} />
-              <span>Old Due / Recovery</span>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                <AlertCircle size={12} />
+                <span>Old Due / Recovery</span>
+              </div>
+              {hasAdjustedDue && (
+                <button onClick={() => onAdjustmentChange(0, '')} className="text-[11px] text-red-500 hover:underline">
+                  Remove
+                </button>
+              )}
             </div>
             <p className="text-[10px] text-gray-400 mb-2">(+) adds to total</p>
             <div className="space-y-2">
