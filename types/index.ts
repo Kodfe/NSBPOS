@@ -138,6 +138,7 @@ export interface StoreSettings {
   whatsappAlertProvider?: 'custom' | 'evolution';
   whatsappAlertApiUrl?: string;
   whatsappAlertApiToken?: string;
+  whatsappAlertSender?: string;
   whatsappAlertRecipient?: string;
   whatsappAlertInstance?: string;
   financialYears?: FinancialYearOption[];

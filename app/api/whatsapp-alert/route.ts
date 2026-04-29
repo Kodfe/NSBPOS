@@ -8,6 +8,7 @@ type AlertPayload = {
     'whatsappAlertProvider' |
     'whatsappAlertApiUrl' |
     'whatsappAlertApiToken' |
+    'whatsappAlertSender' |
     'whatsappAlertRecipient' |
     'whatsappAlertInstance'
   >;
@@ -58,9 +59,11 @@ async function sendEvolution(settings: NonNullable<AlertPayload['settings']>, pr
   const endpoint = trimSlash(settings.whatsappAlertApiUrl);
   const instance = String(settings.whatsappAlertInstance || '').trim();
   const recipient = normalizeNumber(settings.whatsappAlertRecipient);
+  const sender = normalizeNumber(settings.whatsappAlertSender);
 
   if (!instance) throw new Error('Evolution API instance name is required');
   if (!recipient) throw new Error('Receiving WhatsApp number is required');
+  if (sender && sender === recipient) throw new Error('Sending and receiving WhatsApp numbers must be different');
 
   return fetch(`${endpoint}/message/sendText/${encodeURIComponent(instance)}`, {
     method: 'POST',

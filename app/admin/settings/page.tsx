@@ -367,6 +367,11 @@ export default function SettingsPage() {
                 className="input font-mono text-xs" placeholder={form.whatsappAlertProvider === 'evolution' ? 'apikey from Evolution API' : 'Same token from gateway'} />
             </div>
             <div>
+              <Label>Sending WhatsApp Number</Label>
+              <input value={form.whatsappAlertSender || ''} onChange={e => set('whatsappAlertSender', e.target.value.replace(/[^\d+]/g, ''))}
+                className="input font-mono" placeholder="91xxxxxxxxxx" />
+            </div>
+            <div>
               <Label>Receiving WhatsApp Number</Label>
               <input value={form.whatsappAlertRecipient || ''} onChange={e => set('whatsappAlertRecipient', e.target.value.replace(/[^\d+]/g, ''))}
                 className="input font-mono" placeholder="919876543210" />

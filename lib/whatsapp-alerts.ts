@@ -14,6 +14,7 @@ export async function sendLowStockAlert(product: Product, newStock: number, sett
           whatsappAlertProvider: settings.whatsappAlertProvider || 'custom',
           whatsappAlertApiUrl: settings.whatsappAlertApiUrl,
           whatsappAlertApiToken: settings.whatsappAlertApiToken,
+          whatsappAlertSender: settings.whatsappAlertSender,
           whatsappAlertRecipient: settings.whatsappAlertRecipient,
           whatsappAlertInstance: settings.whatsappAlertInstance,
         },

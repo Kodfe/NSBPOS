@@ -27,6 +27,7 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   whatsappAlertProvider: 'custom',
   whatsappAlertApiUrl: '',
   whatsappAlertApiToken: '',
+  whatsappAlertSender: '',
   whatsappAlertRecipient: '',
   whatsappAlertInstance: '',
   financialYears: [
