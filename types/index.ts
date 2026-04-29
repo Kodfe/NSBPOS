@@ -135,10 +135,21 @@ export interface StoreSettings {
   receiptTerms?: string;
   signatureImage?: string;      // data URL used on purchase/receipt signatures
   whatsappAlertEnabled?: boolean;
+  whatsappAlertProvider?: 'custom' | 'evolution';
   whatsappAlertApiUrl?: string;
   whatsappAlertApiToken?: string;
   whatsappAlertRecipient?: string;
+  whatsappAlertInstance?: string;
+  financialYears?: FinancialYearOption[];
   updatedAt?: Date;
+}
+
+export interface FinancialYearOption {
+  id: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
 }
 
 // ── Admin types ───────────────────────────────────────────────────────────────

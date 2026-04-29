@@ -24,9 +24,14 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   receiptTerms: '',
   signatureImage: '',
   whatsappAlertEnabled: false,
+  whatsappAlertProvider: 'custom',
   whatsappAlertApiUrl: '',
   whatsappAlertApiToken: '',
   whatsappAlertRecipient: '',
+  whatsappAlertInstance: '',
+  financialYears: [
+    { id: 'fy-2026-27', label: 'FY 2026-27', startDate: '2026-04-01', endDate: '2027-03-31', isCurrent: true },
+  ],
 };
 
 /** Load from Firestore, fall back to localStorage, then defaults */

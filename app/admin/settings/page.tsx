@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import {
   Store, Phone, Mail, MapPin, Shield, Receipt, Save,
-  CheckCircle2, ToggleLeft, ToggleRight, Tag, FileText, Sparkles, Upload, Image as ImageIcon, X, MessageCircle,
+  CheckCircle2, ToggleLeft, ToggleRight, Tag, FileText, Sparkles, Upload, Image as ImageIcon, X, MessageCircle, CalendarDays, Plus, Trash2,
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { StoreSettings } from '@/types';
@@ -49,6 +49,44 @@ export default function SettingsPage() {
     reader.onload = () => set('signatureImage', String(reader.result || ''));
     reader.onerror = () => toast.error('Could not read signature image');
     reader.readAsDataURL(file);
+  }
+
+  function updateFinancialYear(id: string, patch: Partial<NonNullable<StoreSettings['financialYears']>[number]>) {
+    setForm(f => ({
+      ...f,
+      financialYears: (f.financialYears || []).map(y => y.id === id ? { ...y, ...patch } : y),
+    }));
+    setSaved(false);
+  }
+
+  function markCurrentFinancialYear(id: string) {
+    setForm(f => ({
+      ...f,
+      financialYears: (f.financialYears || []).map(y => ({ ...y, isCurrent: y.id === id })),
+    }));
+    setSaved(false);
+  }
+
+  function addFinancialYear() {
+    const year = new Date().getFullYear();
+    const id = `fy-${Date.now()}`;
+    setForm(f => ({
+      ...f,
+      financialYears: [
+        ...(f.financialYears || []),
+        { id, label: `FY ${year}-${String(year + 1).slice(-2)}`, startDate: `${year}-04-01`, endDate: `${year + 1}-03-31`, isCurrent: !(f.financialYears || []).some(y => y.isCurrent) },
+      ],
+    }));
+    setSaved(false);
+  }
+
+  function removeFinancialYear(id: string) {
+    setForm(f => {
+      const next = (f.financialYears || []).filter(y => y.id !== id);
+      if (next.length > 0 && !next.some(y => y.isCurrent)) next[0] = { ...next[0], isCurrent: true };
+      return { ...f, financialYears: next };
+    });
+    setSaved(false);
   }
 
   if (loading) {
@@ -257,27 +295,76 @@ export default function SettingsPage() {
         </Section>
 
         {/* ── Live Preview ──────────────────────────────────────────────── */}
+        <Section icon={<CalendarDays size={18} className="text-indigo-500" />} title="Financial Years"
+          desc="Choose which year is current for CA and end-of-year reports">
+          <div className="space-y-3">
+            {(form.financialYears || []).map(year => (
+              <div key={year.id} className="grid grid-cols-[1fr_150px_150px_auto_auto] gap-2 items-end border border-gray-100 rounded-xl p-3">
+                <div>
+                  <Label>Financial Year</Label>
+                  <input value={year.label} onChange={e => updateFinancialYear(year.id, { label: e.target.value })} className="input" placeholder="FY 2026-27" />
+                </div>
+                <div>
+                  <Label>Start</Label>
+                  <input type="date" value={year.startDate} onChange={e => updateFinancialYear(year.id, { startDate: e.target.value })} className="input" />
+                </div>
+                <div>
+                  <Label>End</Label>
+                  <input type="date" value={year.endDate} onChange={e => updateFinancialYear(year.id, { endDate: e.target.value })} className="input" />
+                </div>
+                <button onClick={() => markCurrentFinancialYear(year.id)} className={`px-3 py-2 rounded-lg text-xs font-semibold border ${year.isCurrent ? 'bg-green-50 text-green-700 border-green-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                  {year.isCurrent ? 'Current' : 'Mark Current'}
+                </button>
+                <button onClick={() => removeFinancialYear(year.id)} className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50">
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
+            <button onClick={addFinancialYear} className="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+              <Plus size={14} /> Add Financial Year
+            </button>
+          </div>
+        </Section>
+
         <Section icon={<MessageCircle size={18} className="text-green-600" />} title="WhatsApp Stock Alerts"
-          desc="Send low-stock notifications through your WhatsApp gateway">
+          desc="Send low-stock notifications through Custom Gateway or Evolution API">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <Toggle
                 label="Enable WhatsApp low-stock alerts"
-                desc="When a sale takes stock from normal to low, the app calls your WhatsApp gateway API."
+                desc="When a sale takes stock from normal to low, the app sends a WhatsApp alert."
                 value={!!form.whatsappAlertEnabled}
                 onChange={v => set('whatsappAlertEnabled', v)}
                 accent="green"
               />
             </div>
+            <div>
+              <Label>Provider</Label>
+              <select
+                value={form.whatsappAlertProvider || 'custom'}
+                onChange={e => set('whatsappAlertProvider', e.target.value as StoreSettings['whatsappAlertProvider'])}
+                className="input"
+              >
+                <option value="custom">Custom Gateway</option>
+                <option value="evolution">Evolution API</option>
+              </select>
+            </div>
+            {form.whatsappAlertProvider === 'evolution' && (
+              <div>
+                <Label>Evolution Instance Name</Label>
+                <input value={form.whatsappAlertInstance || ''} onChange={e => set('whatsappAlertInstance', e.target.value.trim())}
+                  className="input font-mono text-xs" placeholder="my-store" />
+              </div>
+            )}
             <div className="col-span-2">
-              <Label>Gateway API Link</Label>
+              <Label>{form.whatsappAlertProvider === 'evolution' ? 'Evolution API Server URL' : 'Gateway API Link'}</Label>
               <input value={form.whatsappAlertApiUrl || ''} onChange={e => set('whatsappAlertApiUrl', e.target.value.trim())}
-                className="input font-mono text-xs" placeholder="https://your-whatsapp-gateway.example.com" />
+                className="input font-mono text-xs" placeholder={form.whatsappAlertProvider === 'evolution' ? 'https://your-evolution-api.up.railway.app' : 'https://your-whatsapp-gateway.example.com'} />
             </div>
             <div>
-              <Label>API Token</Label>
+              <Label>{form.whatsappAlertProvider === 'evolution' ? 'Evolution API Key' : 'API Token'}</Label>
               <input type="password" value={form.whatsappAlertApiToken || ''} onChange={e => set('whatsappAlertApiToken', e.target.value)}
-                className="input font-mono text-xs" placeholder="Same token from gateway" />
+                className="input font-mono text-xs" placeholder={form.whatsappAlertProvider === 'evolution' ? 'apikey from Evolution API' : 'Same token from gateway'} />
             </div>
             <div>
               <Label>Receiving WhatsApp Number</Label>
@@ -285,8 +372,13 @@ export default function SettingsPage() {
                 className="input font-mono" placeholder="919876543210" />
             </div>
             <p className="col-span-2 text-[11px] text-gray-400">
-              Use country code without spaces. The sending WhatsApp number connected in the gateway and the receiving number must be different.
+              Use country code without spaces. The sending WhatsApp number connected in the gateway or Evolution instance and the receiving number must be different.
             </p>
+            {form.whatsappAlertProvider === 'evolution' && (
+              <p className="col-span-2 text-[11px] text-gray-500 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+                Evolution API sends through POST /message/sendText/INSTANCE with the apikey header.
+              </p>
+            )}
           </div>
         </Section>
 

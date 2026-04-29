@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
-import { Download, RefreshCw, TrendingUp, TrendingDown, IndianRupee, Receipt, Package } from 'lucide-react';
+import { Download, RefreshCw, TrendingUp, TrendingDown, Receipt, Package, CalendarDays } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { getAllBills } from '@/lib/firestore';
 import { getAllProducts } from '@/lib/admin-firestore';
@@ -9,19 +9,28 @@ import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
 import { formatCurrency } from '@/lib/utils';
 import { Bill, Product, StoreSettings } from '@/types';
 
-type Range = 'today' | 'yesterday' | '7days' | '30days' | 'month' | 'custom';
+type Range = 'today' | 'yesterday' | '7days' | '30days' | 'month' | 'financialYear' | 'custom';
 type ReportTab = 'summary' | 'pl' | 'gst';
 
 const GST_SLABS = [0, 5, 12, 18, 28];
 
-function getRange(r: Range, from: string, to: string) {
+function getCurrentFinancialYear(settings: StoreSettings) {
+  return settings.financialYears?.find(y => y.isCurrent) || settings.financialYears?.[0];
+}
+
+function getRange(r: Range, from: string, to: string, settings: StoreSettings = DEFAULT_SETTINGS) {
   const now = new Date();
+  const fy = getCurrentFinancialYear(settings);
   switch (r) {
     case 'today':     return { from: startOfDay(now), to: endOfDay(now) };
     case 'yesterday': return { from: startOfDay(subDays(now, 1)), to: endOfDay(subDays(now, 1)) };
     case '7days':     return { from: startOfDay(subDays(now, 6)), to: endOfDay(now) };
     case '30days':    return { from: startOfDay(subDays(now, 29)), to: endOfDay(now) };
     case 'month':     return { from: startOfMonth(now), to: endOfMonth(now) };
+    case 'financialYear': return {
+      from: fy?.startDate ? startOfDay(new Date(fy.startDate)) : startOfDay(new Date(now.getFullYear(), 3, 1)),
+      to: fy?.endDate ? endOfDay(new Date(fy.endDate)) : endOfDay(new Date(now.getFullYear() + 1, 2, 31)),
+    };
     case 'custom':    return {
       from: from ? startOfDay(new Date(from)) : startOfDay(subDays(now, 30)),
       to:   to   ? endOfDay(new Date(to))     : endOfDay(now),
@@ -180,6 +189,57 @@ footer{margin-top:32px;font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb
   win.document.close();
 }
 
+function downloadEndOfYearReport(
+  bills: Bill[],
+  settings: StoreSettings,
+  from: Date,
+  to: Date,
+  plRows: { name: string; category: string; qtySold: number; revenue: number; cogs: number; profit: number; margin: number }[],
+) {
+  const win = window.open('', '_blank');
+  if (!win) { toast.error('Allow popups to download the year-end report'); return; }
+  const f = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = (d: Date) => format(d, 'dd MMM yyyy');
+  const totalRevenue = bills.reduce((s, b) => s + b.total, 0);
+  const totalGst = bills.reduce((s, b) => s + b.totalGst, 0);
+  const totalDiscount = bills.reduce((s, b) => s + b.totalDiscount, 0);
+  const totalCogs = plRows.reduce((s, r) => s + r.cogs, 0);
+  const grossProfit = totalRevenue - totalCogs;
+  const fy = getCurrentFinancialYear(settings);
+
+  win.document.write(`<!doctype html><html><head><title>End of Year Report - ${settings.storeName}</title>
+<style>
+body{font-family:Arial,sans-serif;padding:32px;max-width:900px;margin:0 auto;color:#111827;font-size:13px}
+h1{font-size:22px;margin:0;color:#ff9933}h2{font-size:15px;margin:22px 0 8px;border-bottom:1px solid #e5e7eb;padding-bottom:5px}
+p{margin:3px 0;color:#4b5563}.meta{display:flex;justify-content:space-between;border-bottom:2px solid #e5e7eb;padding-bottom:16px;margin-bottom:18px}
+table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#f9fafb;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;padding:8px;border:1px solid #e5e7eb}td{padding:8px;border:1px solid #f3f4f6}.right{text-align:right}.bold{font-weight:700}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.box{border:1px solid #e5e7eb;background:#f9fafb;border-radius:8px;padding:12px}.label{font-size:10px;text-transform:uppercase;color:#6b7280}.val{font-size:16px;font-weight:700;margin-top:3px}.profit{color:${grossProfit >= 0 ? '#16a34a' : '#dc2626'}}.btn{margin-top:20px;background:#ff9933;color:white;border:0;border-radius:8px;padding:9px 18px;font-weight:700}@media print{.no-print{display:none}}
+</style></head><body>
+<div class="meta"><div><h1>${settings.storeName}</h1><p>${settings.address || ''}</p><p>GSTIN: ${settings.gstin || 'Not set'}</p></div><div class="right"><p class="bold">End of Year Report for CA</p><p>${fy?.label || 'Financial Year'}</p><p>${fmt(from)} - ${fmt(to)}</p><p>Generated: ${new Date().toLocaleString('en-IN')}</p></div></div>
+<div class="grid">
+<div class="box"><div class="label">Bills</div><div class="val">${bills.length}</div></div>
+<div class="box"><div class="label">Gross Sales</div><div class="val">${f(totalRevenue)}</div></div>
+<div class="box"><div class="label">GST</div><div class="val">${f(totalGst)}</div></div>
+<div class="box"><div class="label">Gross Profit</div><div class="val profit">${f(grossProfit)}</div></div>
+</div>
+<h2>Summary</h2>
+<table><tbody>
+<tr><td>Total Sales</td><td class="right bold">${f(totalRevenue)}</td></tr>
+<tr><td>Total Discounts</td><td class="right">${f(totalDiscount)}</td></tr>
+<tr><td>Total GST Collected</td><td class="right">${f(totalGst)}</td></tr>
+<tr><td>Estimated Cost of Goods Sold</td><td class="right">${f(totalCogs)}</td></tr>
+<tr><td class="bold">Estimated Gross Profit</td><td class="right bold profit">${f(grossProfit)}</td></tr>
+</tbody></table>
+<h2>Product P&L Summary</h2>
+<table><thead><tr><th>Product</th><th>Category</th><th class="right">Qty</th><th class="right">Sales</th><th class="right">COGS</th><th class="right">Profit</th></tr></thead><tbody>
+${plRows.map(r => `<tr><td>${r.name}</td><td>${r.category}</td><td class="right">${r.qtySold.toFixed(2)}</td><td class="right">${f(r.revenue)}</td><td class="right">${f(r.cogs)}</td><td class="right">${f(r.profit)}</td></tr>`).join('') || '<tr><td colspan="6" class="right">No sales data</td></tr>'}
+</tbody></table>
+<p style="margin-top:24px;font-size:11px;color:#6b7280">This report is generated from NSB POS data for accountant review. Please verify figures before statutory filing.</p>
+<button class="btn no-print" onclick="window.print()">Print / Save as PDF</button>
+<script>setTimeout(function(){window.print()},400)</script>
+</body></html>`);
+  win.document.close();
+}
+
 // ── Main Reports Page ─────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
@@ -200,16 +260,17 @@ export default function ReportsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { from, to } = getRange(range, customFrom, customTo);
+      const { from, to } = getRange(range, customFrom, customTo, settings);
       const all = await getAllBills();
       setBills(all.filter(b => b.status === 'paid' && b.createdAt >= from && b.createdAt <= to));
     } catch { toast.error('Failed to load data'); }
     finally { setLoading(false); }
-  }, [range, customFrom, customTo]);
+  }, [range, customFrom, customTo, settings]);
 
   useEffect(() => { load(); }, [load]);
 
-  const { from, to } = getRange(range, customFrom, customTo);
+  const { from, to } = getRange(range, customFrom, customTo, settings);
+  const currentFinancialYear = getCurrentFinancialYear(settings);
 
   // ── Summary stats ─────────────────────────────────────────────────────────
   const totalRevenue  = bills.reduce((s, b) => s + b.total, 0);
@@ -270,7 +331,7 @@ export default function ReportsPage() {
   const RANGES: { key: Range; label: string }[] = [
     { key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' },
     { key: '7days', label: '7 Days' }, { key: '30days', label: '30 Days' },
-    { key: 'month', label: 'This Month' }, { key: 'custom', label: 'Custom' },
+    { key: 'month', label: 'This Month' }, { key: 'financialYear', label: currentFinancialYear?.label || 'Financial Year' }, { key: 'custom', label: 'Custom' },
   ];
 
   return (
@@ -283,9 +344,17 @@ export default function ReportsPage() {
           <h1 className="text-lg font-bold text-gray-900">Reports</h1>
           <p className="text-xs text-gray-500">P&amp;L analysis · GST compliance · {bills.length} bills loaded</p>
         </div>
-        <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setRange('financialYear'); setTab('pl'); }} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+            <CalendarDays size={14} /> End of Year
+          </button>
+          <button onClick={() => downloadEndOfYearReport(bills, settings, from, to, plRows)} className="flex items-center gap-1.5 px-3 py-2 bg-saffron-400 hover:bg-saffron-500 text-white rounded-lg text-sm font-semibold">
+            <Download size={14} /> CA PDF
+          </button>
+          <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-5">

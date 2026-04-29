@@ -4,15 +4,19 @@ export async function sendLowStockAlert(product: Product, newStock: number, sett
   if (!settings.whatsappAlertEnabled || !settings.whatsappAlertApiUrl) return;
 
   try {
-    const endpoint = settings.whatsappAlertApiUrl.replace(/\/$/, '');
-    await fetch(`${endpoint}/api/stock-low`, {
+    await fetch('/api/whatsapp-alert', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(settings.whatsappAlertApiToken ? { Authorization: `Bearer ${settings.whatsappAlertApiToken}` } : {}),
       },
       body: JSON.stringify({
-        to: settings.whatsappAlertRecipient || undefined,
+        settings: {
+          whatsappAlertProvider: settings.whatsappAlertProvider || 'custom',
+          whatsappAlertApiUrl: settings.whatsappAlertApiUrl,
+          whatsappAlertApiToken: settings.whatsappAlertApiToken,
+          whatsappAlertRecipient: settings.whatsappAlertRecipient,
+          whatsappAlertInstance: settings.whatsappAlertInstance,
+        },
         product: {
           id: product.id,
           name: product.name,
