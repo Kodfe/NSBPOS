@@ -308,6 +308,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   const [invoiceDate, setInvoiceDate] = useState('');
   const [paymentTermsDays, setPaymentTermsDays] = useState('30');
   const [dueDate, setDueDate] = useState('');
+  const [billDiscount, setBillDiscount] = useState('');
   const [amountPaid, setAmountPaid] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PurchaseBill['paymentMethod']>('cash');
   const [notes, setNotes] = useState('');
@@ -336,6 +337,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
     setInvoiceDate(today.toISOString().split('T')[0]);
     setPaymentTermsDays('30');
     setDueDate(due.toISOString().split('T')[0]);
+    setBillDiscount('');
     setAmountPaid('');
     setNotes('');
     setPaymentMethod('cash');
@@ -450,12 +452,15 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   }
 
   const subtotal = items.reduce((s, it) => s + it.purchaseRate * it.quantity, 0);
-  const totalDiscount = items.reduce((s, it) => {
+  const itemDiscount = items.reduce((s, it) => {
     const base = it.purchaseRate * it.quantity;
     return s + base * ((it.discountPercent ?? 0) / 100) + (it.discountAmount ?? 0);
   }, 0);
+  const billDiscountAmount = Math.max(0, parseFloat(billDiscount) || 0);
+  const totalDiscount = itemDiscount + billDiscountAmount;
   const totalGst = items.reduce((s, it) => s + it.gstAmount, 0);
-  const total = items.reduce((s, it) => s + it.total, 0);
+  const totalBeforeBillDiscount = items.reduce((s, it) => s + it.total, 0);
+  const total = Math.max(0, totalBeforeBillDiscount - billDiscountAmount);
   const paid = parseFloat(amountPaid) || 0;
   const balance = total - paid;
 
@@ -465,12 +470,13 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
     const validItems = items.filter(it => it.productName);
     if (validItems.length === 0) { toast.error('Enter product name for items'); return; }
     const billSubtotal = validItems.reduce((s, it) => s + it.purchaseRate * it.quantity, 0);
-    const billDiscount = validItems.reduce((s, it) => {
+    const itemBillDiscount = validItems.reduce((s, it) => {
       const base = it.purchaseRate * it.quantity;
       return s + base * ((it.discountPercent ?? 0) / 100) + (it.discountAmount ?? 0);
     }, 0);
     const billGst = validItems.reduce((s, it) => s + it.gstAmount, 0);
-    const billTotal = validItems.reduce((s, it) => s + it.total, 0);
+    const billLevelDiscount = Math.max(0, parseFloat(billDiscount) || 0);
+    const billTotal = Math.max(0, validItems.reduce((s, it) => s + it.total, 0) - billLevelDiscount);
     const billBalance = Math.max(0, billTotal - paid);
     setSaving(true);
     try {
@@ -482,7 +488,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
         invoiceDate: invoiceDate ? new Date(invoiceDate) : undefined,
         paymentTermsDays: parseInt(paymentTermsDays) || undefined,
         dueDate: dueDate ? new Date(dueDate) : undefined,
-        subtotal: billSubtotal, totalGst: billGst, totalDiscount: billDiscount, roundOff: 0,
+        subtotal: billSubtotal, totalGst: billGst, totalDiscount: itemBillDiscount + billLevelDiscount, roundOff: 0,
         total: billTotal, amountPaid: paid, balance: billBalance,
         paymentMethod: paid > 0 ? paymentMethod : undefined,
         status: paid >= billTotal ? 'paid' : paid > 0 ? 'partial' : 'received',
@@ -791,7 +797,20 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
               <div className="grid grid-cols-2 gap-4 border-t pt-4">
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-                  <div className="flex justify-between text-gray-500 text-xs"><span>Discount</span><span>- {formatCurrency(totalDiscount)}</span></div>
+                  <div className="flex justify-between text-gray-500 text-xs"><span>Item Discount</span><span>- {formatCurrency(itemDiscount)}</span></div>
+                  <div className="flex items-center justify-between gap-3 text-gray-600">
+                    <span>Discount</span>
+                    <input
+                      type="number"
+                      value={billDiscount}
+                      onChange={e => setBillDiscount(e.target.value)}
+                      className="input max-w-32 text-right"
+                      placeholder="0"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="flex justify-between text-gray-500 text-xs"><span>Total Discount</span><span>- {formatCurrency(totalDiscount)}</span></div>
                   <div className="flex justify-between text-gray-500 text-xs"><span>Total GST</span><span>{formatCurrency(totalGst)}</span></div>
                   <div className="flex justify-between font-bold text-gray-900 border-t pt-1 mt-1"><span>Grand Total</span><span>{formatCurrency(total)}</span></div>
                   <div className="flex justify-between text-red-600"><span>Balance Due</span><span>{formatCurrency(Math.max(0, balance))}</span></div>
