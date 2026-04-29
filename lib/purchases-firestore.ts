@@ -98,6 +98,20 @@ export async function updatePurchaseBill(id: string, data: Partial<PurchaseBill>
   await updateDoc(doc(db, 'purchaseBills', id), stripUndefined({ ...data, updatedAt: serverTimestamp() }));
 }
 
+export async function deletePurchaseBill(bill: PurchaseBill): Promise<void> {
+  await deleteDoc(doc(db, 'purchaseBills', bill.id));
+  if (bill.partyId && bill.balance) {
+    try {
+      await updateDoc(doc(db, 'parties', bill.partyId), {
+        currentBalance: increment(-bill.balance),
+        updatedAt: serverTimestamp(),
+      });
+    } catch {
+      // Non-critical - bill was deleted, balance correction failed silently
+    }
+  }
+}
+
 // ── Purchase Orders ───────────────────────────────────────────────────────────
 
 export async function getPurchaseOrders(): Promise<PurchaseOrder[]> {

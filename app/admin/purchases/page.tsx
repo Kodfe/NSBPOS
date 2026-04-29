@@ -9,7 +9,7 @@ import { getAllProducts, adminAddProduct, adminUpdateProduct } from '@/lib/admin
 import { getCategories } from '@/lib/categories-firestore';
 import {
   getParties, createParty, updateParty, deleteParty,
-  getPurchaseBills, createPurchaseBill, updatePurchaseBill,
+  getPurchaseBills, createPurchaseBill, updatePurchaseBill, deletePurchaseBill,
   getPurchaseOrders, createPurchaseOrder, updatePurchaseOrder,
   getPurchaseReturns, createPurchaseReturn,
   getDebitNotes, createDebitNote,
@@ -481,10 +481,18 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   const itemDiscount = items.reduce((s, it) => {
     return s + (it.discountAmount ?? 0) + (it.totalDiscountExclTax ?? 0);
   }, 0);
-  const billDiscountAmount = Math.max(0, parseFloat(billDiscount) || 0);
-  const totalDiscount = itemDiscount + billDiscountAmount;
   const totalGst = items.reduce((s, it) => s + it.gstAmount, 0);
   const totalBeforeBillDiscount = items.reduce((s, it) => s + it.total, 0);
+  const getBillDiscountAmount = (value: string, baseAmount: number) => {
+    const trimmed = value.trim();
+    if (!trimmed) return 0;
+    if (trimmed.endsWith('%')) {
+      return Math.max(0, baseAmount * ((parseFloat(trimmed.slice(0, -1)) || 0) / 100));
+    }
+    return Math.max(0, parseFloat(trimmed) || 0);
+  };
+  const billDiscountAmount = getBillDiscountAmount(billDiscount, totalBeforeBillDiscount);
+  const totalDiscount = itemDiscount + billDiscountAmount;
   const total = Math.max(0, totalBeforeBillDiscount - billDiscountAmount);
   const paid = parseFloat(amountPaid) || 0;
   const balance = total - paid;
@@ -499,8 +507,9 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
       return s + (it.discountAmount ?? 0) + (it.totalDiscountExclTax ?? 0);
     }, 0);
     const billGst = validItems.reduce((s, it) => s + it.gstAmount, 0);
-    const billLevelDiscount = Math.max(0, parseFloat(billDiscount) || 0);
-    const billTotal = Math.max(0, validItems.reduce((s, it) => s + it.total, 0) - billLevelDiscount);
+    const beforeBillDiscount = validItems.reduce((s, it) => s + it.total, 0);
+    const billLevelDiscount = getBillDiscountAmount(billDiscount, beforeBillDiscount);
+    const billTotal = Math.max(0, beforeBillDiscount - billLevelDiscount);
     const billBalance = Math.max(0, billTotal - paid);
     setSaving(true);
     try {
@@ -529,7 +538,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   async function handleBillPaymentStatus(bill: PurchaseBill, status: PurchaseBill['status']) {
     let paid = bill.amountPaid ?? 0;
     if (status === 'paid') paid = bill.total ?? 0;
-    else if (status === 'received') paid = 0;
+    else if (status === 'received' || status === 'draft') paid = 0;
     try {
       await updatePurchaseBill(bill.id, {
         status,
@@ -538,6 +547,27 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
       });
       toast.success('Payment status updated'); load();
     } catch { toast.error('Update failed'); }
+  }
+
+  async function handleMarkDraft(bill: PurchaseBill) {
+    try {
+      await updatePurchaseBill(bill.id, {
+        status: 'draft',
+        amountPaid: 0,
+        balance: bill.total ?? 0,
+      });
+      toast.success('Bill marked as draft');
+      load();
+    } catch { toast.error('Could not mark bill as draft'); }
+  }
+
+  async function handleDeletePurchaseBill(bill: PurchaseBill) {
+    if (!confirm(`Delete purchase bill "${bill.purchaseNumber}"?`)) return;
+    try {
+      await deletePurchaseBill(bill);
+      toast.success('Purchase bill deleted');
+      load();
+    } catch { toast.error('Delete failed'); }
   }
 
   async function handleRecordBillPayment() {
@@ -690,7 +720,12 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
             <tbody className="divide-y divide-gray-50">
               {filteredBills.map(b => (
                 <tr key={b.id} className="hover:bg-gray-50">
-                  <td className="px-5 py-3 font-mono text-xs font-semibold text-gray-700">{b.purchaseNumber}</td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-semibold text-gray-700">{b.purchaseNumber}</span>
+                      {b.status === 'draft' && <StatusBadge status="draft" />}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-gray-600 text-xs">{b.createdAt ? format(b.createdAt, 'dd MMM yyyy') : '—'}</td>
                   <td className="px-4 py-3 font-medium text-gray-800">{b.partyName}</td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{b.invoiceNumber ?? '—'}</td>
@@ -704,9 +739,11 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                       className={`text-xs font-medium rounded-lg px-2 py-1 border-0 outline-none cursor-pointer ${
                         b.status === 'paid'     ? 'bg-green-100 text-green-700' :
                         b.status === 'partial'  ? 'bg-amber-100 text-amber-700' :
+                        b.status === 'draft'    ? 'bg-gray-100 text-gray-600' :
                                                   'bg-red-50 text-red-600'
                       }`}
                     >
+                      <option value="draft">Draft</option>
                       <option value="received">Unpaid</option>
                       <option value="partial">Partial Paid</option>
                       <option value="paid">Paid</option>
@@ -719,6 +756,12 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                       </button>
                       <button onClick={() => { setPayBill(b); setPayAmount(''); setPayMethod('cash'); }} title="Record Payment" className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
                         <IndianRupee size={13} />
+                      </button>
+                      <button onClick={() => handleMarkDraft(b)} title="Mark as Draft" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                        <FileText size={13} />
+                      </button>
+                      <button onClick={() => handleDeletePurchaseBill(b)} title="Delete Bill" className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        <Trash2 size={13} />
                       </button>
                       <button onClick={() => setViewBill(b)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                         <Eye size={12} /> View
@@ -892,20 +935,20 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
               <div className="grid grid-cols-2 gap-4 border-t pt-4">
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-                  <div className="flex justify-between text-gray-500 text-xs"><span>Item Discount</span><span>- {formatCurrency(itemDiscount)}</span></div>
                   <div className="flex items-center justify-between gap-3 text-gray-600">
                     <span>Discount</span>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={billDiscount}
                       onChange={e => setBillDiscount(e.target.value)}
                       className="input max-w-32 text-right"
-                      placeholder="0"
-                      min="0"
-                      step="0.01"
+                      placeholder="0 or 10%"
                     />
                   </div>
-                  <div className="flex justify-between text-gray-500 text-xs"><span>Total Discount</span><span>- {formatCurrency(totalDiscount)}</span></div>
+                  {billDiscount.trim().endsWith('%') && (
+                    <div className="flex justify-between text-gray-500 text-xs"><span>Discount Amount</span><span>- {formatCurrency(billDiscountAmount)}</span></div>
+                  )}
                   <div className="flex justify-between text-gray-500 text-xs"><span>Total GST</span><span>{formatCurrency(totalGst)}</span></div>
                   <div className="flex justify-between font-bold text-gray-900 border-t pt-1 mt-1"><span>Grand Total</span><span>{formatCurrency(total)}</span></div>
                   <div className="flex justify-between text-red-600"><span>Balance Due</span><span>{formatCurrency(Math.max(0, balance))}</span></div>
