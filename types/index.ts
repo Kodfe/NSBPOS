@@ -214,8 +214,8 @@ export interface PurchaseItem {
   unit: string;
   purchaseRate: number;    // price we paid
   mrp: number;
-  discountPercent?: number;
   discountAmount?: number;
+  totalDiscountExclTax?: number;
   gstRate: number;
   gstAmount: number;
   total: number;
