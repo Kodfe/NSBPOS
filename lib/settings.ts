@@ -24,7 +24,6 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   receiptTerms: '',
   signatureImage: '',
   whatsappAlertEnabled: false,
-  whatsappAlertProvider: 'custom',
   whatsappAlertApiUrl: '',
   whatsappAlertApiToken: '',
   whatsappAlertSender: '',

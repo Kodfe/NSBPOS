@@ -11,7 +11,6 @@ export async function sendLowStockAlert(product: Product, newStock: number, sett
       },
       body: JSON.stringify({
         settings: {
-          whatsappAlertProvider: settings.whatsappAlertProvider || 'custom',
           whatsappAlertApiUrl: settings.whatsappAlertApiUrl,
           whatsappAlertApiToken: settings.whatsappAlertApiToken,
           whatsappAlertSender: settings.whatsappAlertSender,

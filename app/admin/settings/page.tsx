@@ -327,7 +327,7 @@ export default function SettingsPage() {
         </Section>
 
         <Section icon={<MessageCircle size={18} className="text-green-600" />} title="WhatsApp Stock Alerts"
-          desc="Send low-stock notifications through Custom Gateway or Evolution API">
+          desc="Send low-stock notifications through Evolution API">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <Toggle
@@ -339,32 +339,19 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <Label>Provider</Label>
-              <select
-                value={form.whatsappAlertProvider || 'custom'}
-                onChange={e => set('whatsappAlertProvider', e.target.value as StoreSettings['whatsappAlertProvider'])}
-                className="input"
-              >
-                <option value="custom">Custom Gateway</option>
-                <option value="evolution">Evolution API</option>
-              </select>
+              <Label>Evolution Instance Name</Label>
+              <input value={form.whatsappAlertInstance || ''} onChange={e => set('whatsappAlertInstance', e.target.value.trim())}
+                className="input font-mono text-xs" placeholder="my-store" />
             </div>
-            {form.whatsappAlertProvider === 'evolution' && (
-              <div>
-                <Label>Evolution Instance Name</Label>
-                <input value={form.whatsappAlertInstance || ''} onChange={e => set('whatsappAlertInstance', e.target.value.trim())}
-                  className="input font-mono text-xs" placeholder="my-store" />
-              </div>
-            )}
             <div className="col-span-2">
-              <Label>{form.whatsappAlertProvider === 'evolution' ? 'Evolution API Server URL' : 'Gateway API Link'}</Label>
+              <Label>Evolution API Server URL</Label>
               <input value={form.whatsappAlertApiUrl || ''} onChange={e => set('whatsappAlertApiUrl', e.target.value.trim())}
-                className="input font-mono text-xs" placeholder={form.whatsappAlertProvider === 'evolution' ? 'https://your-evolution-api.up.railway.app' : 'https://your-whatsapp-gateway.example.com'} />
+                className="input font-mono text-xs" placeholder="https://your-evolution-api.up.railway.app" />
             </div>
             <div>
-              <Label>{form.whatsappAlertProvider === 'evolution' ? 'Evolution API Key' : 'API Token'}</Label>
+              <Label>Evolution API Key</Label>
               <input type="password" value={form.whatsappAlertApiToken || ''} onChange={e => set('whatsappAlertApiToken', e.target.value)}
-                className="input font-mono text-xs" placeholder={form.whatsappAlertProvider === 'evolution' ? 'apikey from Evolution API' : 'Same token from gateway'} />
+                className="input font-mono text-xs" placeholder="apikey from Evolution API" />
             </div>
             <div>
               <Label>Sending WhatsApp Number</Label>
@@ -377,13 +364,11 @@ export default function SettingsPage() {
                 className="input font-mono" placeholder="919876543210" />
             </div>
             <p className="col-span-2 text-[11px] text-gray-400">
-              Use country code without spaces. The sending WhatsApp number connected in the gateway or Evolution instance and the receiving number must be different.
+              Use country code without spaces. The sending WhatsApp number connected in Evolution API and the receiving number must be different.
             </p>
-            {form.whatsappAlertProvider === 'evolution' && (
-              <p className="col-span-2 text-[11px] text-gray-500 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
-                Evolution API sends through POST /message/sendText/INSTANCE with the apikey header.
-              </p>
-            )}
+            <p className="col-span-2 text-[11px] text-gray-500 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+              Evolution API sends through POST /message/sendText/INSTANCE with the apikey header.
+            </p>
           </div>
         </Section>
 

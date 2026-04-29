@@ -5,7 +5,6 @@ export const dynamic = 'force-dynamic';
 
 type AlertPayload = {
   settings?: Pick<StoreSettings,
-    'whatsappAlertProvider' |
     'whatsappAlertApiUrl' |
     'whatsappAlertApiToken' |
     'whatsappAlertSender' |
@@ -38,21 +37,6 @@ function stockMessage(product: AlertPayload['product']) {
     `Minimum stock: ${minStock}${unit}`,
     barcode.trim(),
   ].filter(Boolean).join('\n');
-}
-
-async function sendCustomGateway(settings: NonNullable<AlertPayload['settings']>, product: AlertPayload['product']) {
-  const endpoint = trimSlash(settings.whatsappAlertApiUrl);
-  return fetch(`${endpoint}/api/stock-low`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(settings.whatsappAlertApiToken ? { Authorization: `Bearer ${settings.whatsappAlertApiToken}` } : {}),
-    },
-    body: JSON.stringify({
-      to: settings.whatsappAlertRecipient || undefined,
-      product,
-    }),
-  });
 }
 
 async function sendEvolution(settings: NonNullable<AlertPayload['settings']>, product: AlertPayload['product']) {
@@ -89,10 +73,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: 'WhatsApp API URL is required' }, { status: 400 });
     }
 
-    const provider = settings.whatsappAlertProvider || 'custom';
-    const response = provider === 'evolution'
-      ? await sendEvolution(settings, payload.product)
-      : await sendCustomGateway(settings, payload.product);
+    const response = await sendEvolution(settings, payload.product);
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => '');

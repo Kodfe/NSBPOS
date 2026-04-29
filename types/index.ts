@@ -135,7 +135,6 @@ export interface StoreSettings {
   receiptTerms?: string;
   signatureImage?: string;      // data URL used on purchase/receipt signatures
   whatsappAlertEnabled?: boolean;
-  whatsappAlertProvider?: 'custom' | 'evolution';
   whatsappAlertApiUrl?: string;
   whatsappAlertApiToken?: string;
   whatsappAlertSender?: string;
