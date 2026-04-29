@@ -16,6 +16,8 @@ import {
 import { db } from './firebase';
 import { Product, Bill, Customer, SaleReturn } from '@/types';
 import { normalizeBarcode, stripUndefined } from './utils';
+import { loadSettings } from './settings';
+import { sendLowStockAlert } from './whatsapp-alerts';
 
 function normalizeSearchText(value?: string | null): string {
   return value?.trim().toLowerCase() ?? '';
@@ -89,7 +91,14 @@ export async function updateStock(id: string, quantitySold: number): Promise<voi
   const snap = await getDoc(ref);
   if (snap.exists()) {
     const current = snap.data().stock || 0;
-    await updateDoc(ref, { stock: current - quantitySold, updatedAt: serverTimestamp() });
+    const newStock = current - quantitySold;
+    await updateDoc(ref, { stock: newStock, updatedAt: serverTimestamp() });
+    const product = { id: snap.id, ...snap.data() } as Product;
+    const minStock = product.minStock ?? 5;
+    if (current > minStock && newStock <= minStock) {
+      const settings = await loadSettings();
+      await sendLowStockAlert(product, newStock, settings);
+    }
   }
 }
 

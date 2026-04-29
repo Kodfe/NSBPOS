@@ -134,6 +134,10 @@ export interface StoreSettings {
   footerMessage: string;
   receiptTerms?: string;
   signatureImage?: string;      // data URL used on purchase/receipt signatures
+  whatsappAlertEnabled?: boolean;
+  whatsappAlertApiUrl?: string;
+  whatsappAlertApiToken?: string;
+  whatsappAlertRecipient?: string;
   updatedAt?: Date;
 }
 

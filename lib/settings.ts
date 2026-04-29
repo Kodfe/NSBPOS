@@ -23,6 +23,10 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   footerMessage: 'Thank you for shopping with us!',
   receiptTerms: '',
   signatureImage: '',
+  whatsappAlertEnabled: false,
+  whatsappAlertApiUrl: '',
+  whatsappAlertApiToken: '',
+  whatsappAlertRecipient: '',
 };
 
 /** Load from Firestore, fall back to localStorage, then defaults */

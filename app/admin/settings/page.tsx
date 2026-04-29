@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import {
   Store, Phone, Mail, MapPin, Shield, Receipt, Save,
-  CheckCircle2, ToggleLeft, ToggleRight, Tag, FileText, Sparkles, Upload, Image as ImageIcon, X,
+  CheckCircle2, ToggleLeft, ToggleRight, Tag, FileText, Sparkles, Upload, Image as ImageIcon, X, MessageCircle,
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { StoreSettings } from '@/types';
@@ -257,6 +257,39 @@ export default function SettingsPage() {
         </Section>
 
         {/* ── Live Preview ──────────────────────────────────────────────── */}
+        <Section icon={<MessageCircle size={18} className="text-green-600" />} title="WhatsApp Stock Alerts"
+          desc="Send low-stock notifications through your WhatsApp gateway">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <Toggle
+                label="Enable WhatsApp low-stock alerts"
+                desc="When a sale takes stock from normal to low, the app calls your WhatsApp gateway API."
+                value={!!form.whatsappAlertEnabled}
+                onChange={v => set('whatsappAlertEnabled', v)}
+                accent="green"
+              />
+            </div>
+            <div className="col-span-2">
+              <Label>Gateway API Link</Label>
+              <input value={form.whatsappAlertApiUrl || ''} onChange={e => set('whatsappAlertApiUrl', e.target.value.trim())}
+                className="input font-mono text-xs" placeholder="https://your-whatsapp-gateway.example.com" />
+            </div>
+            <div>
+              <Label>API Token</Label>
+              <input type="password" value={form.whatsappAlertApiToken || ''} onChange={e => set('whatsappAlertApiToken', e.target.value)}
+                className="input font-mono text-xs" placeholder="Same token from gateway" />
+            </div>
+            <div>
+              <Label>Receiving WhatsApp Number</Label>
+              <input value={form.whatsappAlertRecipient || ''} onChange={e => set('whatsappAlertRecipient', e.target.value.replace(/[^\d+]/g, ''))}
+                className="input font-mono" placeholder="919876543210" />
+            </div>
+            <p className="col-span-2 text-[11px] text-gray-400">
+              Use country code without spaces. The sending WhatsApp number connected in the gateway and the receiving number must be different.
+            </p>
+          </div>
+        </Section>
+
         <Section icon={<FileText size={18} className="text-gray-500" />} title="Receipt Preview"
           desc="How the top of your bill will look">
           <div className="bg-gray-50 rounded-xl p-4 font-mono text-[11px] text-gray-700 text-center leading-relaxed border border-gray-200">
