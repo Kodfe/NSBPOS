@@ -132,6 +132,7 @@ export interface StoreSettings {
   showGstOnBill: boolean;      // print the GST breakdown section
   showSavings: boolean;        // print "You Saved ₹X" line
   footerMessage: string;
+  signatureImage?: string;      // data URL used on purchase/receipt signatures
   updatedAt?: Date;
 }
 

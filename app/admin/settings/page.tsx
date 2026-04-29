@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import {
   Store, Phone, Mail, MapPin, Shield, Receipt, Save,
-  CheckCircle2, ToggleLeft, ToggleRight, Tag, FileText, Sparkles,
+  CheckCircle2, ToggleLeft, ToggleRight, Tag, FileText, Sparkles, Upload, Image as ImageIcon, X,
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { StoreSettings } from '@/types';
@@ -37,6 +37,18 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleSignatureUpload(file?: File) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => set('signatureImage', String(reader.result || ''));
+    reader.onerror = () => toast.error('Could not read signature image');
+    reader.readAsDataURL(file);
   }
 
   if (loading) {
@@ -202,6 +214,40 @@ export default function SettingsPage() {
                 accent="green"
               />
             </div>
+
+            <div className="col-span-2">
+              <Label>Authorized Signature</Label>
+              <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 flex items-center gap-4">
+                <div className="w-36 h-20 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-center overflow-hidden">
+                  {form.signatureImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={form.signatureImage} alt="Signature preview" className="max-w-full max-h-full object-contain" />
+                  ) : (
+                    <ImageIcon size={24} className="text-gray-300" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <input
+                    id="signature-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => handleSignatureUpload(e.target.files?.[0])}
+                  />
+                  <div className="flex gap-2">
+                    <label htmlFor="signature-upload" className="inline-flex items-center gap-2 px-3 py-2 bg-saffron-400 hover:bg-saffron-500 text-white rounded-lg text-sm font-semibold cursor-pointer">
+                      <Upload size={14} /> Upload
+                    </label>
+                    {form.signatureImage && (
+                      <button onClick={() => set('signatureImage', '')} className="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">
+                        <X size={14} /> Remove
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-2">Used for authorized signatory on purchase documents.</p>
+                </div>
+              </div>
+            </div>
           </div>
         </Section>
 
@@ -222,6 +268,15 @@ export default function SettingsPage() {
             <div className="border-t border-dashed border-gray-400 mt-2 pt-1 text-gray-400 text-[10px]">
               Bill No: NSB260423-0001 &nbsp;&nbsp; 23/04/26 14:30
             </div>
+            {form.signatureImage && (
+              <div className="mt-3 flex justify-end">
+                <div className="text-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={form.signatureImage} alt="Signature preview" className="h-10 max-w-28 object-contain mx-auto" />
+                  <div className="border-t border-gray-400 mt-1 pt-1 text-[9px] text-gray-500">Authorized Signatory</div>
+                </div>
+              </div>
+            )}
           </div>
         </Section>
 

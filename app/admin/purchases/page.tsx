@@ -1,10 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, X, Check, Eye, Building2, FileText, ShoppingCart, RotateCcw, FileMinus, Download, IndianRupee } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Check, Eye, Building2, FileText, ShoppingCart, RotateCcw, FileMinus, Download, IndianRupee, Search, ScanBarcode, Package } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
-import { Party, PurchaseBill, PurchaseItem, PurchaseOrder, PurchaseReturn, DebitNote } from '@/types';
-import { formatCurrency } from '@/lib/utils';
+import { Party, PurchaseBill, PurchaseItem, PurchaseOrder, PurchaseReturn, DebitNote, Product, Category } from '@/types';
+import { formatCurrency, normalizeBarcode } from '@/lib/utils';
+import { getAllProducts, adminAddProduct, adminUpdateProduct } from '@/lib/admin-firestore';
+import { getCategories } from '@/lib/categories-firestore';
 import {
   getParties, createParty, updateParty, deleteParty,
   getPurchaseBills, createPurchaseBill, updatePurchaseBill,
@@ -25,6 +27,7 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
 ];
 
 const GST_RATES = [0, 5, 12, 18, 28];
+const UNITS = ['piece', 'kg', 'gm', 'ltr', 'ml', 'pack', 'dozen', 'box', 'bottle'];
 
 function emptyItem(): PurchaseItem {
   return { productId: '', productName: '', quantity: 1, unit: 'piece', purchaseRate: 0, mrp: 0, gstRate: 5, gstAmount: 0, total: 0 };
@@ -34,6 +37,40 @@ function calcItem(item: PurchaseItem): PurchaseItem {
   const base = item.purchaseRate * item.quantity;
   const gstAmt = base * item.gstRate / 100;
   return { ...item, gstAmount: gstAmt, total: base + gstAmt };
+}
+
+function productToPurchaseItem(product: Product, quantity = 1): PurchaseItem {
+  return calcItem({
+    productId: product.id,
+    productName: product.name,
+    hsnCode: product.hsnCode,
+    quantity,
+    unit: product.unit || 'piece',
+    purchaseRate: product.purchasePrice ?? product.price ?? 0,
+    mrp: product.mrp ?? product.price ?? 0,
+    gstRate: product.gstRate ?? 0,
+    gstAmount: 0,
+    total: 0,
+  });
+}
+
+function emptyProductForm(categories: Category[], seed?: Partial<Product>): Omit<Product, 'id'> {
+  return {
+    name: seed?.name ?? '',
+    barcode: seed?.barcode ?? '',
+    price: seed?.price ?? 0,
+    mrp: seed?.mrp ?? 0,
+    purchasePrice: seed?.purchasePrice ?? 0,
+    gstRate: seed?.gstRate ?? 0,
+    hsnCode: seed?.hsnCode ?? '',
+    category: seed?.category ?? categories[0]?.name ?? '',
+    unit: seed?.unit ?? 'piece',
+    stock: seed?.stock ?? 0,
+    minStock: seed?.minStock ?? 5,
+    brand: seed?.brand ?? '',
+    isActive: true,
+    isLoose: seed?.isLoose ?? false,
+  };
 }
 
 function billStatus(total: number, paid: number): PurchaseBill['status'] {
@@ -54,6 +91,10 @@ function StatusBadge({ status }: { status: string }) {
     confirmed: 'bg-green-100 text-green-700',
   };
   return <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${cls[status] ?? 'bg-gray-100 text-gray-600'}`}>{status}</span>;
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">{children}</label>;
 }
 
 // ── Parties Tab ───────────────────────────────────────────────────────────────
@@ -249,6 +290,13 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState<'cash' | 'upi' | 'card' | 'credit'>('cash');
   const [paying, setPaying] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [productSearch, setProductSearch] = useState('');
+  const [barcodeScan, setBarcodeScan] = useState('');
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [productForm, setProductForm] = useState<Omit<Product, 'id'>>(emptyProductForm([]));
+  const [addingProduct, setAddingProduct] = useState(false);
 
   const [partyId, setPartyId] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -260,6 +308,11 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
 
   useEffect(() => { load(); }, []);
 
+  useEffect(() => {
+    getAllProducts().then(setProducts).catch(() => setProducts([]));
+    getCategories().then(setCategories).catch(() => setCategories([]));
+  }, []);
+
   async function load() {
     setLoading(true);
     try { setBills(await getPurchaseBills()); }
@@ -270,14 +323,111 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   function openAdd() {
     setPartyId(parties[0]?.id ?? '');
     setInvoiceNumber(''); setInvoiceDate(''); setAmountPaid(''); setNotes('');
-    setPaymentMethod('cash'); setItems([emptyItem()]); setShowModal(true);
+    setPaymentMethod('cash'); setItems([]); setProductSearch(''); setBarcodeScan(''); setShowModal(true);
   }
 
   function updateItem(idx: number, patch: Partial<PurchaseItem>) {
     setItems(prev => prev.map((it, i) => i === idx ? calcItem({ ...it, ...patch }) : it));
   }
-  function addItem() { setItems(prev => [...prev, emptyItem()]); }
+  function addItem(product?: Product) {
+    setItems(prev => [...prev, product ? productToPurchaseItem(product) : emptyItem()]);
+    setProductSearch('');
+  }
   function removeItem(idx: number) { setItems(prev => prev.filter((_, i) => i !== idx)); }
+
+  function findProductByBarcode(value: string) {
+    const barcode = normalizeBarcode(value);
+    return products.find(p => normalizeBarcode(p.barcode) === barcode);
+  }
+
+  function handleBarcodeAdd(value = barcodeScan) {
+    const barcode = normalizeBarcode(value);
+    if (!barcode) return;
+    const product = findProductByBarcode(barcode);
+    if (!product) {
+      setProductForm(emptyProductForm(categories, { barcode }));
+      setShowProductModal(true);
+      toast.error(`Barcode not found: ${barcode}`);
+      return;
+    }
+    addItem(product);
+    setBarcodeScan('');
+    toast.success(`Added ${product.name}`);
+  }
+
+  function openProductModal(seed?: Partial<Product>) {
+    setProductForm(emptyProductForm(categories, seed));
+    setShowProductModal(true);
+  }
+
+  async function handleCreateProduct() {
+    if (!productForm.name.trim()) { toast.error('Product name is required'); return; }
+    if (productForm.price <= 0 && (productForm.purchasePrice ?? 0) <= 0) { toast.error('Enter selling or purchase price'); return; }
+    setAddingProduct(true);
+    try {
+      const id = await adminAddProduct({
+        ...productForm,
+        barcode: normalizeBarcode(productForm.barcode),
+        price: productForm.price || productForm.mrp || productForm.purchasePrice || 0,
+        mrp: productForm.mrp || productForm.price || productForm.purchasePrice || 0,
+        purchasePrice: productForm.purchasePrice || productForm.price || 0,
+        stock: 0,
+      });
+      const product: Product = {
+        id,
+        ...productForm,
+        barcode: normalizeBarcode(productForm.barcode),
+        price: productForm.price || productForm.mrp || productForm.purchasePrice || 0,
+        mrp: productForm.mrp || productForm.price || productForm.purchasePrice || 0,
+        purchasePrice: productForm.purchasePrice || productForm.price || 0,
+        stock: 0,
+      };
+      setProducts(prev => [...prev, product].sort((a, b) => a.name.localeCompare(b.name)));
+      addItem(product);
+      if (productForm.stock > 1) {
+        setItems(prev => prev.map((item, index) => index === prev.length - 1 ? calcItem({ ...item, quantity: productForm.stock }) : item));
+      }
+      setShowProductModal(false);
+      toast.success('Product added to purchase bill');
+    } catch (err: any) { toast.error(`Product save failed: ${err?.message ?? 'Check connection'}`); }
+    finally { setAddingProduct(false); }
+  }
+
+  async function applyPurchaseToProducts(validItems: PurchaseItem[]) {
+    for (const item of validItems) {
+      const existing = item.productId ? products.find(p => p.id === item.productId) : undefined;
+      const byName = products.find(p => p.name.toLowerCase() === item.productName.toLowerCase());
+      const product = existing ?? byName;
+      if (product) {
+        await adminUpdateProduct(product.id, {
+          stock: (product.stock ?? 0) + item.quantity,
+          purchasePrice: item.purchaseRate,
+          mrp: item.mrp || product.mrp,
+          price: product.price || item.mrp || item.purchaseRate,
+          gstRate: item.gstRate,
+          hsnCode: item.hsnCode || product.hsnCode,
+          unit: item.unit || product.unit,
+        });
+      } else {
+        await adminAddProduct({
+          name: item.productName,
+          barcode: '',
+          price: item.mrp || item.purchaseRate,
+          mrp: item.mrp || item.purchaseRate,
+          purchasePrice: item.purchaseRate,
+          gstRate: item.gstRate,
+          hsnCode: item.hsnCode || '',
+          category: categories[0]?.name || 'Essentials',
+          unit: item.unit || 'piece',
+          stock: item.quantity,
+          minStock: 5,
+          brand: '',
+          isActive: true,
+          isLoose: item.unit === 'kg',
+        });
+      }
+    }
+  }
 
   const subtotal = items.reduce((s, it) => s + it.purchaseRate * it.quantity, 0);
   const totalGst = items.reduce((s, it) => s + it.gstAmount, 0);
@@ -290,6 +440,10 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
     if (items.every(it => !it.productName)) { toast.error('Add at least one item'); return; }
     const validItems = items.filter(it => it.productName);
     if (validItems.length === 0) { toast.error('Enter product name for items'); return; }
+    const billSubtotal = validItems.reduce((s, it) => s + it.purchaseRate * it.quantity, 0);
+    const billGst = validItems.reduce((s, it) => s + it.gstAmount, 0);
+    const billTotal = validItems.reduce((s, it) => s + it.total, 0);
+    const billBalance = Math.max(0, billTotal - paid);
     setSaving(true);
     try {
       const party = parties.find(p => p.id === partyId)!;
@@ -298,12 +452,14 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
         purchaseNumber, partyId, partyName: party.name,
         items: validItems, invoiceNumber: invoiceNumber || undefined,
         invoiceDate: invoiceDate ? new Date(invoiceDate) : undefined,
-        subtotal, totalGst, totalDiscount: 0, roundOff: 0,
-        total, amountPaid: paid, balance,
+        subtotal: billSubtotal, totalGst: billGst, totalDiscount: 0, roundOff: 0,
+        total: billTotal, amountPaid: paid, balance: billBalance,
         paymentMethod: paid > 0 ? paymentMethod : undefined,
-        status: paid >= total ? 'paid' : paid > 0 ? 'partial' : 'received',
+        status: paid >= billTotal ? 'paid' : paid > 0 ? 'partial' : 'received',
         notes: notes || undefined,
       });
+      await applyPurchaseToProducts(validItems);
+      setProducts(await getAllProducts());
       toast.success('Purchase bill created');
       setShowModal(false); load();
     } catch (err: any) { toast.error(`Save failed: ${err?.message ?? 'Check Firestore connection'}`); }
@@ -347,6 +503,15 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   const totalBillValue = bills.reduce((s, b) => s + b.total, 0);
   const totalBillPaid  = bills.reduce((s, b) => s + b.amountPaid, 0);
   const totalBillDue   = bills.reduce((s, b) => s + b.balance, 0);
+  const productMatches = products
+    .filter(p => {
+      const term = productSearch.trim().toLowerCase();
+      if (!term) return true;
+      return p.name.toLowerCase().includes(term) ||
+        (p.brand ?? '').toLowerCase().includes(term) ||
+        (p.barcode ?? '').includes(productSearch.trim());
+    })
+    .slice(0, 8);
 
   return (
     <>
@@ -440,7 +605,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
       {/* New Purchase Bill Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-[96vw] max-w-7xl mx-4 h-[92vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b">
               <h2 className="font-bold text-gray-900">New Purchase Bill</h2>
               <button onClick={() => setShowModal(false)}><X size={18} className="text-gray-400" /></button>
@@ -474,11 +639,51 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                 </div>
               </div>
 
+              {/* Product picker */}
+              <div className="grid grid-cols-12 gap-3 border-y border-gray-100 py-4">
+                <div className="col-span-6 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+                  <input value={productSearch} onChange={e => setProductSearch(e.target.value)} className="input pl-9" placeholder="Search previous products" />
+                  {productSearch && (
+                    <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                      {productMatches.map(p => (
+                        <button key={p.id} onClick={() => addItem(p)} className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center justify-between">
+                          <span>
+                            <span className="text-sm font-medium text-gray-800">{p.name}</span>
+                            <span className="block text-[11px] text-gray-400">{p.barcode || 'No barcode'} - Stock {p.stock} {p.unit}</span>
+                          </span>
+                          <span className="text-xs font-semibold text-saffron-600">{formatCurrency(p.purchasePrice ?? p.price)}</span>
+                        </button>
+                      ))}
+                      <button onClick={() => openProductModal({ name: productSearch })} className="w-full px-3 py-2 text-left text-saffron-700 bg-saffron-50 hover:bg-saffron-100 text-sm font-semibold">
+                        + Add new product
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="col-span-4 relative">
+                  <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    value={barcodeScan}
+                    onChange={e => setBarcodeScan(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleBarcodeAdd(); } }}
+                    className="input pl-9"
+                    placeholder="Scan barcode"
+                  />
+                </div>
+                <button onClick={() => handleBarcodeAdd()} className="col-span-1 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 flex items-center justify-center" title="Add scanned barcode">
+                  <ScanBarcode size={18} />
+                </button>
+                <button onClick={() => openProductModal()} className="col-span-1 bg-saffron-400 hover:bg-saffron-500 text-white rounded-xl flex items-center justify-center" title="Add new product">
+                  <Plus size={18} />
+                </button>
+              </div>
+
               {/* Items */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="label" style={{ marginBottom: 0 }}>Items</label>
-                  <button onClick={addItem} className="text-xs text-saffron-600 font-medium hover:underline flex items-center gap-1"><Plus size={12} /> Add Item</button>
+                  <button onClick={() => addItem()} className="text-xs text-saffron-600 font-medium hover:underline flex items-center gap-1"><Plus size={12} /> Add Item</button>
                 </div>
                 <div className="space-y-2">
                   {items.map((it, idx) => (
@@ -550,6 +755,40 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
               <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-saffron-400 hover:bg-saffron-500 disabled:bg-gray-200 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-colors">
                 {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check size={16} />}
                 Create Purchase Bill
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showProductModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={e => e.target === e.currentTarget && setShowProductModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <div className="flex items-center gap-2">
+                <Package size={18} className="text-saffron-500" />
+                <h2 className="font-bold text-gray-900">Add New Product</h2>
+              </div>
+              <button onClick={() => setShowProductModal(false)}><X size={18} className="text-gray-400" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 grid grid-cols-2 gap-4">
+              <div className="col-span-2"><Label>Product Name *</Label><input value={productForm.name} onChange={e => setProductForm(f => ({ ...f, name: e.target.value }))} className="input" autoFocus /></div>
+              <div><Label>Barcode</Label><input value={productForm.barcode || ''} onChange={e => setProductForm(f => ({ ...f, barcode: normalizeBarcode(e.target.value) }))} className="input" /></div>
+              <div><Label>Brand</Label><input value={productForm.brand || ''} onChange={e => setProductForm(f => ({ ...f, brand: e.target.value }))} className="input" /></div>
+              <div><Label>Purchase Price</Label><input type="number" value={productForm.purchasePrice ?? 0} onChange={e => setProductForm(f => ({ ...f, purchasePrice: parseFloat(e.target.value) || 0 }))} className="input" min="0" step="0.01" /></div>
+              <div><Label>Selling Price</Label><input type="number" value={productForm.price} onChange={e => setProductForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} className="input" min="0" step="0.01" /></div>
+              <div><Label>MRP</Label><input type="number" value={productForm.mrp} onChange={e => setProductForm(f => ({ ...f, mrp: parseFloat(e.target.value) || 0 }))} className="input" min="0" step="0.01" /></div>
+              <div><Label>Opening Stock</Label><input type="number" value={productForm.stock} onChange={e => setProductForm(f => ({ ...f, stock: parseFloat(e.target.value) || 0 }))} className="input" min="0" step="0.01" /></div>
+              <div><Label>GST Rate</Label><select value={productForm.gstRate} onChange={e => setProductForm(f => ({ ...f, gstRate: parseInt(e.target.value) }))} className="input">{GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}</select></div>
+              <div><Label>HSN Code</Label><input value={productForm.hsnCode || ''} onChange={e => setProductForm(f => ({ ...f, hsnCode: e.target.value }))} className="input" /></div>
+              <div><Label>Category</Label><select value={productForm.category} onChange={e => setProductForm(f => ({ ...f, category: e.target.value }))} className="input">{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
+              <div><Label>Unit</Label><select value={productForm.unit} onChange={e => setProductForm(f => ({ ...f, unit: e.target.value }))} className="input">{UNITS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
+            </div>
+            <div className="px-6 pb-6 flex gap-3 border-t pt-4">
+              <button onClick={() => setShowProductModal(false)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateProduct} disabled={addingProduct} className="flex-1 py-2.5 bg-saffron-400 hover:bg-saffron-500 disabled:bg-gray-200 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2">
+                {addingProduct ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check size={16} />}
+                Add Product
               </button>
             </div>
           </div>
