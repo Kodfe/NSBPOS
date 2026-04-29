@@ -53,6 +53,7 @@ function billFromDoc(d: any): PurchaseBill {
   return {
     id: d.id, ...data,
     invoiceDate: toDate(data.invoiceDate),
+    dueDate: toDate(data.dueDate),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   } as PurchaseBill;
@@ -74,6 +75,7 @@ export async function createPurchaseBill(data: Omit<PurchaseBill, 'id' | 'create
   const payload = stripUndefined({
     ...data,
     invoiceDate: data.invoiceDate ? Timestamp.fromDate(data.invoiceDate) : null,
+    dueDate: data.dueDate ? Timestamp.fromDate(data.dueDate) : null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });

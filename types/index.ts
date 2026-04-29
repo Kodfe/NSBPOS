@@ -214,6 +214,8 @@ export interface PurchaseItem {
   unit: string;
   purchaseRate: number;    // price we paid
   mrp: number;
+  discountPercent?: number;
+  discountAmount?: number;
   gstRate: number;
   gstAmount: number;
   total: number;
@@ -227,6 +229,8 @@ export interface PurchaseBill {
   items: PurchaseItem[];
   invoiceNumber?: string;  // vendor's invoice number
   invoiceDate?: Date;
+  paymentTermsDays?: number;
+  dueDate?: Date;
   subtotal: number;
   totalGst: number;
   totalDiscount: number;

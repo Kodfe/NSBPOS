@@ -30,13 +30,16 @@ const GST_RATES = [0, 5, 12, 18, 28];
 const UNITS = ['piece', 'kg', 'gm', 'ltr', 'ml', 'pack', 'dozen', 'box', 'bottle'];
 
 function emptyItem(): PurchaseItem {
-  return { productId: '', productName: '', quantity: 1, unit: 'piece', purchaseRate: 0, mrp: 0, gstRate: 5, gstAmount: 0, total: 0 };
+  return { productId: '', productName: '', quantity: 1, unit: 'piece', purchaseRate: 0, mrp: 0, discountPercent: 0, discountAmount: 0, gstRate: 5, gstAmount: 0, total: 0 };
 }
 
 function calcItem(item: PurchaseItem): PurchaseItem {
   const base = item.purchaseRate * item.quantity;
-  const gstAmt = base * item.gstRate / 100;
-  return { ...item, gstAmount: gstAmt, total: base + gstAmt };
+  const percentDiscount = base * ((item.discountPercent ?? 0) / 100);
+  const flatDiscount = item.discountAmount ?? 0;
+  const taxable = Math.max(0, base - percentDiscount - flatDiscount);
+  const gstAmt = taxable * item.gstRate / 100;
+  return { ...item, gstAmount: gstAmt, total: taxable + gstAmt };
 }
 
 function productToPurchaseItem(product: Product, quantity = 1): PurchaseItem {
@@ -48,6 +51,8 @@ function productToPurchaseItem(product: Product, quantity = 1): PurchaseItem {
     unit: product.unit || 'piece',
     purchaseRate: product.purchasePrice ?? product.price ?? 0,
     mrp: product.mrp ?? product.price ?? 0,
+    discountPercent: 0,
+    discountAmount: 0,
     gstRate: product.gstRate ?? 0,
     gstAmount: 0,
     total: 0,
@@ -233,6 +238,7 @@ function printPurchaseBill(bill: PurchaseBill) {
     <tr>
       <td>${i + 1}</td><td>${it.productName}</td>
       <td align="right">${it.quantity} ${it.unit}</td>
+      <td align="right">₹${(it.mrp ?? 0).toFixed(2)}</td>
       <td align="right">₹${it.purchaseRate.toFixed(2)}</td>
       <td align="right">${it.gstRate}%</td>
       <td align="right">₹${it.total.toFixed(2)}</td>
@@ -262,7 +268,7 @@ td{padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px}
 <hr/>
 <p style="margin:0 0 14px;font-size:13px"><strong>From:</strong> ${bill.partyName}</p>
 <table>
-  <thead><tr><th>#</th><th>Product</th><th align="right">Qty</th><th align="right">Rate</th><th align="right">GST%</th><th align="right">Amount</th></tr></thead>
+  <thead><tr><th>#</th><th>Product</th><th align="right">Qty</th><th align="right">MRP</th><th align="right">Purchase Price</th><th align="right">GST%</th><th align="right">Amount</th></tr></thead>
   <tbody>${rows}</tbody>
 </table>
 <table style="margin-left:auto;width:260px" class="tot">
@@ -293,7 +299,6 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [productSearch, setProductSearch] = useState('');
-  const [barcodeScan, setBarcodeScan] = useState('');
   const [showProductModal, setShowProductModal] = useState(false);
   const [productForm, setProductForm] = useState<Omit<Product, 'id'>>(emptyProductForm([]));
   const [addingProduct, setAddingProduct] = useState(false);
@@ -301,6 +306,8 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   const [partyId, setPartyId] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceDate, setInvoiceDate] = useState('');
+  const [paymentTermsDays, setPaymentTermsDays] = useState('30');
+  const [dueDate, setDueDate] = useState('');
   const [amountPaid, setAmountPaid] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PurchaseBill['paymentMethod']>('cash');
   const [notes, setNotes] = useState('');
@@ -322,8 +329,19 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
 
   function openAdd() {
     setPartyId(parties[0]?.id ?? '');
-    setInvoiceNumber(''); setInvoiceDate(''); setAmountPaid(''); setNotes('');
-    setPaymentMethod('cash'); setItems([]); setProductSearch(''); setBarcodeScan(''); setShowModal(true);
+    const today = new Date();
+    const due = new Date(today);
+    due.setDate(due.getDate() + 30);
+    setInvoiceNumber('');
+    setInvoiceDate(today.toISOString().split('T')[0]);
+    setPaymentTermsDays('30');
+    setDueDate(due.toISOString().split('T')[0]);
+    setAmountPaid('');
+    setNotes('');
+    setPaymentMethod('cash');
+    setItems([]);
+    setProductSearch('');
+    setShowModal(true);
   }
 
   function updateItem(idx: number, patch: Partial<PurchaseItem>) {
@@ -340,18 +358,20 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
     return products.find(p => normalizeBarcode(p.barcode) === barcode);
   }
 
-  function handleBarcodeAdd(value = barcodeScan) {
-    const barcode = normalizeBarcode(value);
-    if (!barcode) return;
-    const product = findProductByBarcode(barcode);
+  function handleProductEntry(value = productSearch) {
+    const term = value.trim();
+    const barcode = normalizeBarcode(term);
+    if (!term) return;
+    const product = findProductByBarcode(barcode) ??
+      products.find(p => p.name.toLowerCase() === term.toLowerCase());
     if (!product) {
-      setProductForm(emptyProductForm(categories, { barcode }));
+      const looksLikeBarcode = /^\d{4,}$/.test(barcode);
+      setProductForm(emptyProductForm(categories, looksLikeBarcode ? { barcode } : { name: term }));
       setShowProductModal(true);
-      toast.error(`Barcode not found: ${barcode}`);
+      toast.error(`${term} not found. Add it as a product.`);
       return;
     }
     addItem(product);
-    setBarcodeScan('');
     toast.success(`Added ${product.name}`);
   }
 
@@ -430,6 +450,10 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   }
 
   const subtotal = items.reduce((s, it) => s + it.purchaseRate * it.quantity, 0);
+  const totalDiscount = items.reduce((s, it) => {
+    const base = it.purchaseRate * it.quantity;
+    return s + base * ((it.discountPercent ?? 0) / 100) + (it.discountAmount ?? 0);
+  }, 0);
   const totalGst = items.reduce((s, it) => s + it.gstAmount, 0);
   const total = items.reduce((s, it) => s + it.total, 0);
   const paid = parseFloat(amountPaid) || 0;
@@ -441,6 +465,10 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
     const validItems = items.filter(it => it.productName);
     if (validItems.length === 0) { toast.error('Enter product name for items'); return; }
     const billSubtotal = validItems.reduce((s, it) => s + it.purchaseRate * it.quantity, 0);
+    const billDiscount = validItems.reduce((s, it) => {
+      const base = it.purchaseRate * it.quantity;
+      return s + base * ((it.discountPercent ?? 0) / 100) + (it.discountAmount ?? 0);
+    }, 0);
     const billGst = validItems.reduce((s, it) => s + it.gstAmount, 0);
     const billTotal = validItems.reduce((s, it) => s + it.total, 0);
     const billBalance = Math.max(0, billTotal - paid);
@@ -452,7 +480,9 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
         purchaseNumber, partyId, partyName: party.name,
         items: validItems, invoiceNumber: invoiceNumber || undefined,
         invoiceDate: invoiceDate ? new Date(invoiceDate) : undefined,
-        subtotal: billSubtotal, totalGst: billGst, totalDiscount: 0, roundOff: 0,
+        paymentTermsDays: parseInt(paymentTermsDays) || undefined,
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        subtotal: billSubtotal, totalGst: billGst, totalDiscount: billDiscount, roundOff: 0,
         total: billTotal, amountPaid: paid, balance: billBalance,
         paymentMethod: paid > 0 ? paymentMethod : undefined,
         status: paid >= billTotal ? 'paid' : paid > 0 ? 'partial' : 'received',
@@ -626,7 +656,31 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                 </div>
                 <div>
                   <label className="label">Invoice Date</label>
-                  <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="input" />
+                  <input type="date" value={invoiceDate} onChange={e => {
+                    setInvoiceDate(e.target.value);
+                    const base = e.target.value ? new Date(e.target.value) : new Date();
+                    base.setDate(base.getDate() + (parseInt(paymentTermsDays) || 0));
+                    setDueDate(base.toISOString().split('T')[0]);
+                  }} className="input" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="label">Payment Terms</label>
+                    <div className="flex">
+                      <input type="number" value={paymentTermsDays} onChange={e => {
+                        const days = e.target.value;
+                        setPaymentTermsDays(days);
+                        const base = invoiceDate ? new Date(invoiceDate) : new Date();
+                        base.setDate(base.getDate() + (parseInt(days) || 0));
+                        setDueDate(base.toISOString().split('T')[0]);
+                      }} className="input rounded-r-none" min="0" />
+                      <span className="px-3 py-2 border-y border-r border-gray-200 bg-gray-50 text-xs text-gray-600 rounded-r-lg">days</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Due Date</label>
+                    <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="input" />
+                  </div>
                 </div>
                 <div>
                   <label className="label">Payment Method</label>
@@ -641,9 +695,15 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
 
               {/* Product picker */}
               <div className="grid grid-cols-12 gap-3 border-y border-gray-100 py-4">
-                <div className="col-span-6 relative">
+                <div className="col-span-10 relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-                  <input value={productSearch} onChange={e => setProductSearch(e.target.value)} className="input pl-9" placeholder="Search previous products" />
+                  <input
+                    value={productSearch}
+                    onChange={e => setProductSearch(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleProductEntry(); } }}
+                    className="input pl-9"
+                    placeholder="Search previous products or scan barcode"
+                  />
                   {productSearch && (
                     <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
                       {productMatches.map(p => (
@@ -661,17 +721,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                     </div>
                   )}
                 </div>
-                <div className="col-span-4 relative">
-                  <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                  <input
-                    value={barcodeScan}
-                    onChange={e => setBarcodeScan(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleBarcodeAdd(); } }}
-                    className="input pl-9"
-                    placeholder="Scan barcode"
-                  />
-                </div>
-                <button onClick={() => handleBarcodeAdd()} className="col-span-1 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 flex items-center justify-center" title="Add scanned barcode">
+                <button onClick={() => handleProductEntry()} className="col-span-1 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 flex items-center justify-center" title="Add scanned barcode">
                   <ScanBarcode size={18} />
                 </button>
                 <button onClick={() => openProductModal()} className="col-span-1 bg-saffron-400 hover:bg-saffron-500 text-white rounded-xl flex items-center justify-center" title="Add new product">
@@ -688,11 +738,11 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                 <div className="space-y-2">
                   {items.map((it, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-gray-50 rounded-xl p-3">
-                      <div className="col-span-3">
+                      <div className="col-span-2">
                         {idx === 0 && <label className="label">Product Name</label>}
                         <input value={it.productName} onChange={e => updateItem(idx, { productName: e.target.value, productId: e.target.value.toLowerCase().replace(/\s+/g, '-') })} className="input" placeholder="Product name" />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         {idx === 0 && <label className="label">Qty</label>}
                         <input type="number" value={it.quantity} onChange={e => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })} className="input" placeholder="1" min="0" step="0.01" />
                       </div>
@@ -700,7 +750,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                         {idx === 0 && <label className="label">Unit</label>}
                         <input value={it.unit} onChange={e => updateItem(idx, { unit: e.target.value })} className="input" placeholder="pc" />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         {idx === 0 && <label className="label">Rate (₹)</label>}
                         <input type="number" value={it.purchaseRate} onChange={e => updateItem(idx, { purchaseRate: parseFloat(e.target.value) || 0 })} className="input" placeholder="0" min="0" step="0.01" />
                       </div>
@@ -713,6 +763,13 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                         <select value={it.gstRate} onChange={e => updateItem(idx, { gstRate: parseInt(e.target.value) })} className="input">
                           {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
                         </select>
+                      </div>
+                      <div className="col-span-2">
+                        {idx === 0 && <label className="label">Discount</label>}
+                        <div className="grid grid-cols-2 gap-1">
+                          <input type="number" value={it.discountPercent ?? 0} onChange={e => updateItem(idx, { discountPercent: parseFloat(e.target.value) || 0 })} className="input text-right" placeholder="%" min="0" step="0.01" />
+                          <input type="number" value={it.discountAmount ?? 0} onChange={e => updateItem(idx, { discountAmount: parseFloat(e.target.value) || 0 })} className="input text-right" placeholder="Rs" min="0" step="0.01" />
+                        </div>
                       </div>
                       <div className="col-span-2 flex items-end gap-2">
                         <div className="flex-1">
@@ -734,6 +791,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
               <div className="grid grid-cols-2 gap-4 border-t pt-4">
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                  <div className="flex justify-between text-gray-500 text-xs"><span>Discount</span><span>- {formatCurrency(totalDiscount)}</span></div>
                   <div className="flex justify-between text-gray-500 text-xs"><span>Total GST</span><span>{formatCurrency(totalGst)}</span></div>
                   <div className="flex justify-between font-bold text-gray-900 border-t pt-1 mt-1"><span>Grand Total</span><span>{formatCurrency(total)}</span></div>
                   <div className="flex justify-between text-red-600"><span>Balance Due</span><span>{formatCurrency(Math.max(0, balance))}</span></div>
@@ -822,7 +880,8 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                     <th className="text-left py-2 px-2">#</th>
                     <th className="text-left py-2 px-2">Product</th>
                     <th className="text-right py-2 px-2">Qty</th>
-                    <th className="text-right py-2 px-2">Rate</th>
+                    <th className="text-right py-2 px-2">MRP</th>
+                    <th className="text-right py-2 px-2">Purchase Price</th>
                     <th className="text-right py-2 px-2">GST</th>
                     <th className="text-right py-2 px-2">Total</th>
                   </tr>
@@ -833,6 +892,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                       <td className="py-2 px-2 text-gray-400">{i + 1}</td>
                       <td className="py-2 px-2 font-medium">{it.productName}</td>
                       <td className="py-2 px-2 text-right">{it.quantity} {it.unit}</td>
+                      <td className="py-2 px-2 text-right">₹{it.mrp ?? 0}</td>
                       <td className="py-2 px-2 text-right">₹{it.purchaseRate}</td>
                       <td className="py-2 px-2 text-right">{it.gstRate}%</td>
                       <td className="py-2 px-2 text-right font-semibold">₹{it.total.toFixed(2)}</td>
