@@ -79,6 +79,21 @@ function parseRows(rows: Record<string, unknown>[]) {
   });
 }
 
+function rowsFromSheet(sheet: XLSX.WorkSheet) {
+  const table = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', raw: true });
+  const headerIndex = table.findIndex(row => {
+    const keys = row.map(cell => keyOf(String(cell || '')));
+    return keys.includes('name') && keys.some(key => key === 'stockquantity' || key === 'stockqty' || key === 'stock');
+  });
+
+  if (headerIndex < 0) return [];
+
+  const headers = table[headerIndex].map(cell => String(cell || '').trim());
+  return table.slice(headerIndex + 1)
+    .filter(row => row.some(cell => String(cell || '').trim()))
+    .map(row => Object.fromEntries(headers.map((header, index) => [header || `Column ${index + 1}`, row[index] ?? ''])));
+}
+
 export default function BillBookMigratorPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState('');
@@ -114,7 +129,11 @@ export default function BillBookMigratorPage() {
       try {
         const workbook = XLSX.read(reader.result, { type: 'array', cellDates: false });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const parsed = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '', raw: true });
+        const parsed = rowsFromSheet(sheet);
+        if (parsed.length === 0) {
+          toast.error('Could not find BillBook header row');
+          return;
+        }
         const mapped = parseRows(parsed);
         setRows(mapped);
         toast.success(`${mapped.filter(r => r.name && r.price > 0).length} products ready`);

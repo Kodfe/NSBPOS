@@ -10,7 +10,6 @@ import { getCategories } from '@/lib/categories-firestore';
 
 const UNITS = ['piece', 'kg', 'gm', 'ltr', 'ml', 'pack', 'dozen', 'box', 'bottle'];
 const GST_RATES = [0, 5, 12, 18, 28];
-const OLD_BILLBOOK_HEADERS = ['Name', 'Batch No.', 'Item Code', 'Purchase Price', 'Selling Price', 'Stock Quantity', 'Stock Value', 'Item Category Name', 'MRP'];
 
 function emptyProduct(categories: Category[]): Omit<Product, 'id'> {
   return {
@@ -171,19 +170,6 @@ export default function ProductsPage() {
     a.click();
   }
 
-  function downloadBillBookTemplate() {
-    const rows = [
-      OLD_BILLBOOK_HEADERS,
-      ['Amul Milk 1L', '', '8901063011083', '60', '68', '50 PCS', '3000', 'Dairy', '68'],
-      ['Loose Rice', '', 'RICE001', '45', '55', '100 KG', '4500', 'Grocery', '60'],
-    ];
-    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-    a.download = 'Old_BillBook_Product_Template.csv';
-    a.click();
-  }
-
   // ── CSV Import / Bulk Upload ──────────────────────────────────────────────
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -278,9 +264,6 @@ export default function ProductsPage() {
         <div className="flex items-center gap-2">
           <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
             <FileText size={14} /> Template
-          </button>
-          <button onClick={downloadBillBookTemplate} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-            <FileText size={14} /> BillBook Format
           </button>
           <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
             <Download size={14} /> Export CSV
