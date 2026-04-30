@@ -8,12 +8,14 @@ import WeightModal from './WeightModal';
 interface Props {
   products: Product[];
   categories: Category[];
+  modeLabel?: string;
+  hiddenProductCount?: number;
   onAddItem: (product: Product) => void;
   onAddLooseItem: (product: Product, weightKg: number) => void;
   onBarcodeSearch: (barcode: string) => void;
 }
 
-export default function ProductSearch({ products, categories, onAddItem, onAddLooseItem, onBarcodeSearch }: Props) {
+export default function ProductSearch({ products, categories, modeLabel, hiddenProductCount = 0, onAddItem, onAddLooseItem, onBarcodeSearch }: Props) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [weightProduct, setWeightProduct] = useState<Product | null>(null);
@@ -76,6 +78,19 @@ export default function ProductSearch({ products, categories, onAddItem, onAddLo
     <div className="flex flex-col h-full">
       {/* Search bar */}
       <div className="p-3 bg-white border-b border-gray-200">
+        {modeLabel && (
+          <div className="mb-2 flex items-center justify-between rounded-xl border border-orange-100 bg-orange-50 px-3 py-2">
+            <div>
+              <p className="text-xs font-bold text-orange-700">{modeLabel}</p>
+              <p className="text-[11px] text-orange-500">Loaded bill items are in cart. Product list shows rest items for exchange or add-on sale.</p>
+            </div>
+            {hiddenProductCount > 0 && (
+              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-orange-600">
+                {hiddenProductCount} in cart
+              </span>
+            )}
+          </div>
+        )}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input

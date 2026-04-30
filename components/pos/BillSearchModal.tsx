@@ -242,7 +242,7 @@ export default function BillSearchModal({ onClose, onEditBill, onReturnBill }: P
                               onClick={() => { onEditBill(bill); onClose(); }}
                               className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-saffron-400 hover:bg-saffron-500 text-white rounded-xl text-xs font-semibold transition-colors"
                             >
-                              <Edit size={13} /> Load to Cart
+                              <Edit size={13} /> Modify / Exchange
                             </button>
                           </div>
                         )}
@@ -251,7 +251,7 @@ export default function BillSearchModal({ onClose, onEditBill, onReturnBill }: P
                             onClick={() => { onEditBill(bill); onClose(); }}
                             className="w-full mt-3 flex items-center justify-center gap-1.5 py-2 bg-saffron-400 hover:bg-saffron-500 text-white rounded-xl text-xs font-semibold transition-colors"
                           >
-                            <Edit size={13} /> Load Held Bill to Cart
+                            <Edit size={13} /> Modify / Exchange
                           </button>
                         )}
                         {(bill.status === 'cancelled' || bill.status === 'open') && (
@@ -273,7 +273,7 @@ export default function BillSearchModal({ onClose, onEditBill, onReturnBill }: P
         </div>
 
         <div className="px-5 py-3 border-t border-gray-100 text-center text-xs text-gray-400">
-          Showing {bills.length} bills · Only paid bills can be returned or reloaded
+          Showing {bills.length} bills · Use Modify / Exchange to edit, replace, or add products
         </div>
       </div>
     </div>

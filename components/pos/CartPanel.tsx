@@ -49,7 +49,7 @@ export default function CartPanel({
       {isModified && (
         <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 border-b border-orange-200">
           <FilePen size={13} className="text-orange-500 flex-shrink-0" />
-          <span className="text-xs font-bold text-orange-600">MODIFIED BILL</span>
+          <span className="text-xs font-bold text-orange-600">MODIFY / EXCHANGE</span>
           <span className="text-xs text-orange-400 ml-1">·  Original paid: {formatCurrency(originalBillTotal!)}</span>
         </div>
       )}

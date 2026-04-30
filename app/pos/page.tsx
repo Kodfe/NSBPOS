@@ -55,6 +55,10 @@ export default function POSPage() {
   const [loginLoading, setLoginLoading] = useState(false);
 
   const pos = usePOS();
+  const modifiedCartProductIds = new Set(pos.activeBill?.originalBillId ? pos.activeBill.items.map(item => item.product.id) : []);
+  const productSearchProducts = pos.activeBill?.originalBillId
+    ? products.filter(product => !modifiedCartProductIds.has(product.id))
+    : products;
 
   // Load store settings
   useEffect(() => {
@@ -292,7 +296,7 @@ export default function POSPage() {
         try { await returnStock(item.product.id, item.weightKg ?? item.quantity); } catch {}
       }
 
-      toast.success(`Bill ${bill.billNumber} loaded — modify items, then collect or refund the difference.`);
+      toast.success(`Bill ${bill.billNumber} loaded for modify / exchange. Add new products or adjust existing items.`);
     } catch (err) {
       toast.error('Could not load bill to cart');
       console.error(err);
@@ -437,8 +441,10 @@ export default function POSPage() {
         {/* Left: Product search */}
         <div className="flex-1 flex flex-col overflow-hidden border-r border-gray-200">
           <ProductSearch
-            products={products}
+            products={productSearchProducts}
             categories={categories}
+            modeLabel={pos.activeBill?.originalBillId ? 'Modify / Exchange Mode' : undefined}
+            hiddenProductCount={modifiedCartProductIds.size}
             onAddItem={item => { pos.addItem(item); toast.success(`Added: ${item.name}`, { duration: 1000 }); }}
             onAddLooseItem={(product, weight) => {
               pos.addLooseItem(product, weight);
