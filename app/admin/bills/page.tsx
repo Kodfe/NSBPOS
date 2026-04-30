@@ -8,8 +8,7 @@ import { formatCurrency } from '@/lib/utils';
 import { getAllBills, getAllSaleReturns } from '@/lib/firestore';
 
 type DateRange = 'today' | 'yesterday' | '7d' | '30d' | 'custom';
-type StatusFilter = 'all' | 'paid' | 'held' | 'cancelled' | 'open';
-type SpecialFilter = 'all' | 'refunded' | 'adjusted';
+type BillTypeFilter = 'all' | 'paid' | 'refund' | 'adjusted';
 
 const DEMO_BILLS: Bill[] = [
   {
@@ -73,8 +72,7 @@ export default function BillsPage() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [specialFilter, setSpecialFilter] = useState<SpecialFilter>('all');
+  const [billTypeFilter, setBillTypeFilter] = useState<BillTypeFilter>('all');
   const [viewBill, setViewBill] = useState<Bill | null>(null);
 
   useEffect(() => {
@@ -121,7 +119,6 @@ export default function BillsPage() {
     const { from, to } = getDateRange(dateRange, customFrom, customTo);
     return bills.filter(b => {
       const inRange = isWithinInterval(b.createdAt, { start: from, end: to });
-      const matchStatus = statusFilter === 'all' || b.status === statusFilter;
       const refundTotal = refundTotalsByBillId[b.id] ?? 0;
       const hasRefund = refundTotal > 0;
       const hasAdjustment =
@@ -130,17 +127,18 @@ export default function BillsPage() {
         (b.storeCreditEarned ?? 0) > 0 ||
         !!b.originalBillNumber ||
         !!b.adjustedToBillNumber;
-      const matchSpecial =
-        specialFilter === 'all' ||
-        (specialFilter === 'refunded' && hasRefund) ||
-        (specialFilter === 'adjusted' && hasAdjustment);
+      const matchType =
+        billTypeFilter === 'all' ||
+        (billTypeFilter === 'paid' && b.status === 'paid' && !hasRefund && !hasAdjustment) ||
+        (billTypeFilter === 'refund' && hasRefund) ||
+        (billTypeFilter === 'adjusted' && hasAdjustment);
       const matchSearch = !search ||
         b.billNumber.toLowerCase().includes(search.toLowerCase()) ||
         (b.customer?.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
         (b.customer?.phone ?? '').includes(search);
-      return inRange && matchStatus && matchSpecial && matchSearch;
+      return inRange && matchType && matchSearch;
     });
-  }, [bills, customFrom, customTo, dateRange, refundTotalsByBillId, search, specialFilter, statusFilter]);
+  }, [billTypeFilter, bills, customFrom, customTo, dateRange, refundTotalsByBillId, search]);
 
   const totalValue = filtered.reduce((s, b) => s + b.total, 0);
 
@@ -176,20 +174,16 @@ export default function BillsPage() {
               className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-saffron-400" />
           </div>
         )}
-        {/* Status */}
         <div className="flex gap-1.5">
-          {(['all', 'paid', 'held', 'cancelled', 'open'] as StatusFilter[]).map(s => (
-            <button key={s} onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${statusFilter === s ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-              {s}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-1.5">
-          {(['all', 'refunded', 'adjusted'] as SpecialFilter[]).map(s => (
-            <button key={s} onClick={() => setSpecialFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${specialFilter === s ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-              {s}
+          {([
+            ['all', 'All Bills'],
+            ['paid', 'Paid Bills'],
+            ['refund', 'Refund'],
+            ['adjusted', 'Adjusted'],
+          ] as [BillTypeFilter, string][]).map(([value, label]) => (
+            <button key={value} onClick={() => setBillTypeFilter(value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${billTypeFilter === value ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {label}
             </button>
           ))}
         </div>
