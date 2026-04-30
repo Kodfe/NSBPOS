@@ -65,7 +65,10 @@ export interface Bill {
   originalBillTotal?: number;    // set when this bill is a modified/edited version of a paid bill
   originalBillId?: string;       // ID of the paid bill this was loaded from
   originalBillNumber?: string;   // bill number of the original (shown in parens on new bill)
+  adjustedToBillId?: string;
   adjustedToBillNumber?: string; // set on the old cancelled bill — which new bill replaced it
+  cancelReason?: string;
+  cancelledAt?: Date;
   paymentMethod?: 'cash' | 'upi' | 'card' | 'mixed';
   upiRef?: string;
   cardRef?: string;

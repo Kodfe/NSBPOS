@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Plus, Search, Download, Upload, Pencil, Trash2, Scale, Package, X, Check, AlertTriangle, FileText } from 'lucide-react';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
 import { Product, Category } from '@/types';
 import { getAllProducts, adminAddProduct, adminUpdateProduct, adminDeleteProduct, bulkUpsertProducts } from '@/lib/admin-firestore';
@@ -9,6 +10,7 @@ import { getCategories } from '@/lib/categories-firestore';
 
 const UNITS = ['piece', 'kg', 'gm', 'ltr', 'ml', 'pack', 'dozen', 'box', 'bottle'];
 const GST_RATES = [0, 5, 12, 18, 28];
+const OLD_BILLBOOK_HEADERS = ['Name', 'Batch No.', 'Item Code', 'Purchase Price', 'Selling Price', 'Stock Quantity', 'Stock Value', 'Item Category Name', 'MRP'];
 
 function emptyProduct(categories: Category[]): Omit<Product, 'id'> {
   return {
@@ -16,6 +18,71 @@ function emptyProduct(categories: Category[]): Omit<Product, 'id'> {
     category: categories[0]?.name || '', unit: 'piece', stock: 0, minStock: 5,
     brand: '', isActive: true, isLoose: false,
   };
+}
+
+function keyOf(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function readColumn(row: Record<string, unknown>, names: string[]) {
+  const entries = Object.entries(row);
+  const wanted = names.map(keyOf);
+  const match = entries.find(([key]) => wanted.includes(keyOf(key)));
+  return match?.[1] ?? '';
+}
+
+function parseNumber(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const cleaned = String(value ?? '').replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+  return cleaned ? Number(cleaned[0]) || 0 : 0;
+}
+
+function parseCode(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.trunc(value).toString();
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  const numeric = Number(text.replace(/,/g, ''));
+  if (Number.isFinite(numeric)) return Math.trunc(numeric).toString();
+  return text.replace(/[\s\x00-\x1F\x7F]/g, '');
+}
+
+function parseUnit(value: unknown) {
+  const text = String(value ?? '').toLowerCase();
+  if (text.includes('kg')) return 'kg';
+  if (text.includes('gm') || text.includes('gram')) return 'gm';
+  if (text.includes('ltr') || text.includes('liter') || text.includes('litre')) return 'ltr';
+  if (text.includes('ml')) return 'ml';
+  if (text.includes('box')) return 'box';
+  if (text.includes('pack') || text.includes('pkt')) return 'pack';
+  if (text.includes('bottle')) return 'bottle';
+  if (text.includes('dozen')) return 'dozen';
+  return 'piece';
+}
+
+function normalizeBillBookRows(rows: Record<string, unknown>[]) {
+  return rows.map(row => {
+    const stockValue = readColumn(row, ['Stock Quantity', 'Stock Qty', 'Stock']);
+    const unit = parseUnit(stockValue);
+    const sellingPrice = parseNumber(readColumn(row, ['Selling Price', 'Sales Price', 'Sale Price']));
+    const mrp = parseNumber(readColumn(row, ['MRP']));
+
+    return {
+      name: String(readColumn(row, ['Name', 'Product Name', 'Item Name']) || '').trim(),
+      barcode: parseCode(readColumn(row, ['Item Code', 'Barcode', 'Bar Code', 'Code'])) || parseCode(readColumn(row, ['Batch No.', 'Batch No', 'Batch'])),
+      price: sellingPrice || mrp,
+      mrp: mrp || sellingPrice,
+      purchasePrice: parseNumber(readColumn(row, ['Purchase Price', 'Purchase Rate', 'Cost Price'])),
+      gstRate: parseNumber(readColumn(row, ['GST', 'GST Rate', 'Tax'])),
+      hsnCode: String(readColumn(row, ['HSN', 'HSN Code', 'HSN/SAC']) || '').trim(),
+      category: String(readColumn(row, ['Item Category Name', 'Item Category', 'Category']) || 'Essentials').trim() || 'Essentials',
+      unit,
+      stock: parseNumber(stockValue),
+      minStock: 5,
+      brand: '',
+      isLoose: unit === 'kg' || unit === 'gm',
+      isActive: true,
+    };
+  }).filter(r => r.name && r.price > 0);
 }
 
 export default function ProductsPage() {
@@ -29,6 +96,7 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [bulkRows, setBulkRows] = useState<Omit<Product, 'id'>[]>([]);
+  const [bulkSource, setBulkSource] = useState('CSV');
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -103,11 +171,46 @@ export default function ProductsPage() {
     a.click();
   }
 
+  function downloadBillBookTemplate() {
+    const rows = [
+      OLD_BILLBOOK_HEADERS,
+      ['Amul Milk 1L', '', '8901063011083', '60', '68', '50 PCS', '3000', 'Dairy', '68'],
+      ['Loose Rice', '', 'RICE001', '45', '55', '100 KG', '4500', 'Grocery', '60'],
+    ];
+    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    a.download = 'Old_BillBook_Product_Template.csv';
+    a.click();
+  }
+
   // ── CSV Import / Bulk Upload ──────────────────────────────────────────────
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (/\.(xlsx|xls)$/i.test(file.name)) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const workbook = XLSX.read(reader.result, { type: 'array', cellDates: false });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '', raw: true });
+          const products = normalizeBillBookRows(rows);
+          setBulkRows(products);
+          setBulkSource('Old BillBook Excel');
+          setShowBulk(true);
+          toast.success(`${products.length} products found in Excel`);
+        } catch {
+          toast.error('Excel parse error');
+        }
+      };
+      reader.onerror = () => toast.error('Could not read Excel file');
+      reader.readAsArrayBuffer(file);
+      e.target.value = '';
+      return;
+    }
+
     Papa.parse(file, {
       header: true, skipEmptyLines: true,
       complete: (result) => {
@@ -128,6 +231,7 @@ export default function ProductsPage() {
           isActive: row.isActive?.toUpperCase() !== 'FALSE',
         })).filter(r => r.name && r.price > 0);
         setBulkRows(rows);
+        setBulkSource('CSV');
         setShowBulk(true);
       },
       error: () => toast.error('CSV parse error'),
@@ -175,16 +279,19 @@ export default function ProductsPage() {
           <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
             <FileText size={14} /> Template
           </button>
+          <button onClick={downloadBillBookTemplate} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+            <FileText size={14} /> BillBook Format
+          </button>
           <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
             <Download size={14} /> Export CSV
           </button>
           <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 border border-saffron-200 text-saffron-700 rounded-lg text-sm hover:bg-saffron-50">
-            <Upload size={14} /> Import CSV
+            <Upload size={14} /> Import CSV/Excel
           </button>
           <button onClick={openAdd} className="flex items-center gap-1.5 px-4 py-2 bg-saffron-400 hover:bg-saffron-500 text-white rounded-lg text-sm font-semibold">
             <Plus size={14} /> Add Product
           </button>
-          <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+          <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileChange} />
         </div>
       </div>
 
@@ -373,11 +480,11 @@ export default function ProductsPage() {
       {/* Bulk Upload Preview */}
       {showBulk && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b">
               <div>
                 <h2 className="font-bold text-gray-900">Bulk Upload Preview</h2>
-                <p className="text-xs text-gray-500">{bulkRows.length} products ready to import</p>
+                <p className="text-xs text-gray-500">{bulkRows.length} products ready to import from {bulkSource}</p>
               </div>
               <button onClick={() => setShowBulk(false)}><X size={18} /></button>
             </div>
@@ -385,7 +492,7 @@ export default function ProductsPage() {
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    {['Name', 'Barcode', 'Price', 'GST', 'Category', 'Stock', 'Loose'].map(h => (
+                    {['Name', 'Barcode', 'Purchase', 'Selling', 'MRP', 'GST', 'Category', 'Stock'].map(h => (
                       <th key={h} className="text-left px-4 py-2 text-gray-500 uppercase font-semibold">{h}</th>
                     ))}
                   </tr>
@@ -395,11 +502,12 @@ export default function ProductsPage() {
                     <tr key={i} className={r.name && r.price > 0 ? '' : 'bg-red-50'}>
                       <td className="px-4 py-2 font-medium">{r.name || <span className="text-red-500">Missing</span>}</td>
                       <td className="px-4 py-2 text-gray-500 font-mono">{r.barcode}</td>
+                      <td className="px-4 py-2 text-gray-500">₹{r.purchasePrice ?? 0}</td>
                       <td className="px-4 py-2 text-saffron-600">₹{r.price}</td>
+                      <td className="px-4 py-2 text-gray-500">₹{r.mrp}</td>
                       <td className="px-4 py-2">{r.gstRate}%</td>
                       <td className="px-4 py-2">{r.category}</td>
                       <td className="px-4 py-2">{r.stock} {r.unit}</td>
-                      <td className="px-4 py-2">{r.isLoose ? '⚖️' : '—'}</td>
                     </tr>
                   ))}
                 </tbody>

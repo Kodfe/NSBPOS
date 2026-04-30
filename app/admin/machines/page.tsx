@@ -63,8 +63,7 @@ export default function MachinesPage() {
     if (!op) return;
     setStarting(true);
     try {
-      await startMachineSession(showStartModal.id, op);
-      // update machineName in log
+      await startMachineSession(showStartModal, op);
       toast.success(`Session started — ${op.name} on ${showStartModal.name}`);
       setShowStartModal(null);
       setSelectedOperator('');

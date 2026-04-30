@@ -4,6 +4,13 @@ import { Bill, BillTab, Customer, PaymentDetails, Product } from '@/types';
 import { calcCartItem, calcBillTotals, shortId } from '@/lib/utils';
 import { saveBill, updateStock } from '@/lib/firestore';
 
+type SaleSessionMeta = {
+  machineId?: string;
+  machineName?: string;
+  operatorId?: string;
+  operatorName?: string;
+};
+
 function createEmptyBill(index: number): BillTab {
   const id = shortId();
   return {
@@ -192,7 +199,7 @@ export function usePOS() {
 
   // ── Sale processing ────────────────────────────────────────────────────────
 
-  const processSale = useCallback(async (payment: PaymentDetails, billNumber: string) => {
+  const processSale = useCallback(async (payment: PaymentDetails, billNumber: string, session?: SaleSessionMeta) => {
     if (!activeBill || activeBill.items.length === 0) return null;
     setIsProcessing(true);
     try {
@@ -208,6 +215,9 @@ export function usePOS() {
         ...(payment.saveCreditAmount ? { storeCreditEarned: payment.saveCreditAmount } : {}),
         ...(payment.upiRef ? { upiRef: payment.upiRef } : {}),
         ...(payment.cardRef ? { cardRef: payment.cardRef } : {}),
+        ...(session?.machineId ? { machineId: session.machineId } : {}),
+        ...(session?.operatorId ? { operatorId: session.operatorId, cashierId: session.operatorId } : {}),
+        ...(session?.operatorName ? { notes: [activeBill.notes, `Operator: ${session.operatorName}`].filter(Boolean).join(' | ') } : {}),
         status: 'paid',
         paidAt: saleTime,
       };

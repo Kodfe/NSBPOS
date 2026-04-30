@@ -47,6 +47,7 @@ function mapBillDoc(id: string, data: Record<string, unknown>): Bill {
     ...data,
     createdAt: parseStoredDate(data.createdAt) || new Date(),
     paidAt: parseStoredDate(data.paidAt),
+    cancelledAt: parseStoredDate(data.cancelledAt),
   } as Bill;
 }
 

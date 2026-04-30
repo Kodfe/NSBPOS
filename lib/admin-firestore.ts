@@ -6,16 +6,52 @@ import { db } from './firebase';
 import { Bill, MachineLog, Operator, POSMachine, Product, SalesSummary } from '@/types';
 import { stripUndefined } from './utils';
 
+function parseDateValue(value: unknown): Date | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date) return value;
+  if (typeof (value as { toDate?: unknown }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  return undefined;
+}
+
+function mapMachineDoc(id: string, data: Record<string, unknown>): POSMachine {
+  return {
+    id,
+    ...data,
+    createdAt: parseDateValue(data.createdAt) || new Date(),
+    sessionStartedAt: parseDateValue(data.sessionStartedAt),
+  } as POSMachine;
+}
+
+function mapOperatorDoc(id: string, data: Record<string, unknown>): Operator {
+  return {
+    id,
+    ...data,
+    createdAt: parseDateValue(data.createdAt) || new Date(),
+    lastLoginAt: parseDateValue(data.lastLoginAt),
+  } as Operator;
+}
+
+function mapBillDoc(id: string, data: Record<string, unknown>): Bill {
+  return {
+    id,
+    ...data,
+    createdAt: parseDateValue(data.createdAt) || new Date(),
+    paidAt: parseDateValue(data.paidAt),
+  } as Bill;
+}
+
 // ── Machines ──────────────────────────────────────────────────────────────────
 
 export async function getMachines(): Promise<POSMachine[]> {
   const snap = await getDocs(query(collection(db, 'machines'), orderBy('createdAt', 'asc')));
-  return snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate() } as POSMachine));
+  return snap.docs.map(d => mapMachineDoc(d.id, d.data()));
 }
 
 export function subscribeMachines(cb: (m: POSMachine[]) => void) {
   return onSnapshot(query(collection(db, 'machines'), orderBy('createdAt', 'asc')), snap => {
-    cb(snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate() } as POSMachine)));
+    cb(snap.docs.map(d => mapMachineDoc(d.id, d.data())));
   });
 }
 
@@ -32,17 +68,17 @@ export async function deleteMachine(id: string): Promise<void> {
   await deleteDoc(doc(db, 'machines', id));
 }
 
-export async function startMachineSession(machineId: string, operator: Operator): Promise<void> {
+export async function startMachineSession(machine: POSMachine, operator: Operator): Promise<void> {
   const now = new Date();
-  await updateDoc(doc(db, 'machines', machineId), {
+  await updateDoc(doc(db, 'machines', machine.id), {
     isActive: true,
     currentOperatorId: operator.id,
     currentOperatorName: operator.name,
     sessionStartedAt: Timestamp.fromDate(now),
   });
   await addDoc(collection(db, 'machineLogs'), {
-    machineId,
-    machineName: '', // filled by caller
+    machineId: machine.id,
+    machineName: machine.name,
     operatorId: operator.id,
     operatorName: operator.name,
     action: 'start',
@@ -81,12 +117,12 @@ export async function stopMachineSession(machine: POSMachine, billsCount: number
 
 export async function getOperators(): Promise<Operator[]> {
   const snap = await getDocs(query(collection(db, 'operators'), orderBy('createdAt', 'asc')));
-  return snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate() } as Operator));
+  return snap.docs.map(d => mapOperatorDoc(d.id, d.data()));
 }
 
 export function subscribeOperators(cb: (o: Operator[]) => void) {
   return onSnapshot(query(collection(db, 'operators'), orderBy('createdAt', 'asc')), snap => {
-    cb(snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate() } as Operator)));
+    cb(snap.docs.map(d => mapOperatorDoc(d.id, d.data())));
   });
 }
 
@@ -107,7 +143,7 @@ export async function verifyOperatorPin(pin: string): Promise<Operator | null> {
   const q = query(collection(db, 'operators'), where('pin', '==', pin), where('isActive', '==', true), limit(1));
   const snap = await getDocs(q);
   if (snap.empty) return null;
-  return { id: snap.docs[0].id, ...snap.docs[0].data(), createdAt: snap.docs[0].data().createdAt?.toDate() } as Operator;
+  return mapOperatorDoc(snap.docs[0].id, snap.docs[0].data());
 }
 
 // ── Machine Logs ──────────────────────────────────────────────────────────────
@@ -130,26 +166,15 @@ export async function getMachineLogs(filters?: {
 // ── Sales Analytics ───────────────────────────────────────────────────────────
 
 export async function getSalesSummary(from: Date, to: Date): Promise<SalesSummary> {
-  const fromTs = Timestamp.fromDate(from);
-  const toTs = Timestamp.fromDate(to);
-  const q = query(
-    collection(db, 'bills'),
-    where('status', '==', 'paid'),
-    where('paidAt', '>=', fromTs),
-    where('paidAt', '<=', toTs),
-    orderBy('paidAt', 'asc'),
-  );
-  const snap = await getDocs(q);
-  const bills = snap.docs.map(d => ({
-    ...d.data(),
-    id: d.id,
-    paidAt: d.data().paidAt?.toDate(),
-    createdAt: d.data().createdAt?.toDate(),
-  } as Bill));
+  const snap = await getDocs(collection(db, 'bills'));
+  const bills = snap.docs
+    .map(d => mapBillDoc(d.id, d.data()))
+    .filter(b => b.status === 'paid' && b.paidAt && b.paidAt >= from && b.paidAt <= to)
+    .sort((a, b) => (a.paidAt?.getTime() || 0) - (b.paidAt?.getTime() || 0));
 
   const totalSales = bills.reduce((s, b) => s + b.total, 0);
   const totalBills = bills.length;
-  const totalItems = bills.reduce((s, b) => s + b.items.reduce((si, i) => si + i.quantity, 0), 0);
+  const totalItems = bills.reduce((s, b) => s + b.items.reduce((si, i) => si + (i.weightKg ?? i.quantity), 0), 0);
   const cashSales = bills.filter(b => b.paymentMethod === 'cash').reduce((s, b) => s + b.total, 0);
   const upiSales = bills.filter(b => b.paymentMethod === 'upi').reduce((s, b) => s + b.total, 0);
   const cardSales = bills.filter(b => b.paymentMethod === 'card').reduce((s, b) => s + b.total, 0);
@@ -163,7 +188,7 @@ export async function getSalesSummary(from: Date, to: Date): Promise<SalesSummar
     for (const item of bill.items) {
       const key = item.product.id;
       const existing = productMap.get(key) || { name: item.product.name, qty: 0, revenue: 0 };
-      productMap.set(key, { name: item.product.name, qty: existing.qty + item.quantity, revenue: existing.revenue + item.total });
+      productMap.set(key, { name: item.product.name, qty: existing.qty + (item.weightKg ?? item.quantity), revenue: existing.revenue + item.total });
     }
   }
   const topProducts = Array.from(productMap.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 10);

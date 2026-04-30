@@ -67,6 +67,7 @@ function getDateRange(range: DateRange, customFrom: string, customTo: string): {
 export default function BillsPage() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [refundTotalsByBillId, setRefundTotalsByBillId] = useState<Record<string, number>>({});
+  const [refundDetailsByBillId, setRefundDetailsByBillId] = useState<Record<string, { returnNumber: string; total: number; refundMethod: string }[]>>({});
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange>('today');
   const [customFrom, setCustomFrom] = useState('');
@@ -90,11 +91,21 @@ export default function BillsPage() {
             return acc;
           }, {})
         );
+        setRefundDetailsByBillId(
+          saleReturns.reduce<Record<string, { returnNumber: string; total: number; refundMethod: string }[]>>((acc, saleReturn) => {
+            acc[saleReturn.originalBillId] = [
+              ...(acc[saleReturn.originalBillId] ?? []),
+              { returnNumber: saleReturn.returnNumber, total: saleReturn.total, refundMethod: saleReturn.refundMethod },
+            ];
+            return acc;
+          }, {})
+        );
       } catch {
         if (!active) return;
         toast.error('Failed to load bills');
         setBills(DEMO_BILLS);
         setRefundTotalsByBillId({});
+        setRefundDetailsByBillId({});
       } finally {
         if (active) {
           setLoading(false);
@@ -116,7 +127,9 @@ export default function BillsPage() {
       const hasAdjustment =
         (b.adjustment ?? 0) !== 0 ||
         (b.storeCreditApplied ?? 0) > 0 ||
-        (b.storeCreditEarned ?? 0) > 0;
+        (b.storeCreditEarned ?? 0) > 0 ||
+        !!b.originalBillNumber ||
+        !!b.adjustedToBillNumber;
       const matchSpecial =
         specialFilter === 'all' ||
         (specialFilter === 'refunded' && hasRefund) ||
@@ -214,24 +227,33 @@ export default function BillsPage() {
             <tbody className="bg-white divide-y divide-gray-50">
               {filtered.map(b => {
                 const refundTotal = refundTotalsByBillId[b.id] ?? 0;
+                const refundDetails = refundDetailsByBillId[b.id] ?? [];
                 const hasRefund = refundTotal > 0;
                 const hasAdjustment =
                   (b.adjustment ?? 0) !== 0 ||
                   (b.storeCreditApplied ?? 0) > 0 ||
-                  (b.storeCreditEarned ?? 0) > 0;
+                  (b.storeCreditEarned ?? 0) > 0 ||
+                  !!b.originalBillNumber ||
+                  !!b.adjustedToBillNumber;
                 return (
                 <tr key={b.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-5 py-3">
                     <div className="font-mono text-xs font-semibold text-gray-700">{b.billNumber}</div>
+                    {b.originalBillNumber && (
+                      <div className="text-[10px] text-orange-500 font-medium mt-0.5">
+                        Adjusted from ({b.originalBillNumber})
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-1 mt-1">
                       {hasRefund && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-600">
-                          Refunded {formatCurrency(refundTotal)}
+                          Returned {formatCurrency(refundTotal)}
+                          {refundDetails[0]?.returnNumber ? ` (${refundDetails[0].returnNumber})` : ''}
                         </span>
                       )}
                       {hasAdjustment && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700">
-                          Adjusted
+                          {b.adjustedToBillNumber ? `Replaced by ${b.adjustedToBillNumber}` : 'Adjusted'}
                         </span>
                       )}
                     </div>
@@ -285,6 +307,33 @@ export default function BillsPage() {
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
               {/* Customer */}
+              {(viewBill.originalBillNumber || viewBill.adjustedToBillNumber || viewBill.cancelReason) && (
+                <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 text-sm">
+                  <p className="text-xs text-orange-500 font-semibold uppercase tracking-wide mb-1">Bill Adjustment</p>
+                  {viewBill.originalBillNumber && (
+                    <p className="text-orange-700">New bill made from original bill <span className="font-mono font-semibold">({viewBill.originalBillNumber})</span></p>
+                  )}
+                  {viewBill.adjustedToBillNumber && (
+                    <p className="text-orange-700">This bill was adjusted and replaced by <span className="font-mono font-semibold">{viewBill.adjustedToBillNumber}</span></p>
+                  )}
+                  {viewBill.cancelReason && <p className="text-xs text-orange-500 mt-1">{viewBill.cancelReason}</p>}
+                </div>
+              )}
+
+              {/* Customer */}
+              {(refundDetailsByBillId[viewBill.id]?.length ?? 0) > 0 && (
+                <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-sm">
+                  <p className="text-xs text-red-500 font-semibold uppercase tracking-wide mb-1">Sale Return</p>
+                  {refundDetailsByBillId[viewBill.id].map(detail => (
+                    <div key={detail.returnNumber} className="flex justify-between gap-3 text-red-700">
+                      <span>Return bill <span className="font-mono font-semibold">({detail.returnNumber})</span> via {detail.refundMethod}</span>
+                      <span className="font-semibold">{formatCurrency(detail.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Customer */}
               {viewBill.customer && (
                 <div className="bg-gray-50 rounded-xl p-3 text-sm">
                   <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Customer</p>
@@ -335,6 +384,12 @@ export default function BillsPage() {
                 {viewBill.roundOff !== 0 && <div className="flex justify-between text-gray-400 text-xs"><span>Round Off</span><span>{viewBill.roundOff > 0 ? '+' : ''}{viewBill.roundOff.toFixed(2)}</span></div>}
                 {viewBill.adjustment !== undefined && viewBill.adjustment !== 0 && (
                   <div className="flex justify-between text-gray-500 text-xs"><span>{viewBill.adjustmentNote || 'Adjustment'}</span><span>{formatCurrency(viewBill.adjustment)}</span></div>
+                )}
+                {(viewBill.storeCreditApplied ?? 0) > 0 && (
+                  <div className="flex justify-between text-green-600 text-xs"><span>Store credit applied</span><span>-{formatCurrency(viewBill.storeCreditApplied!)}</span></div>
+                )}
+                {(viewBill.storeCreditEarned ?? 0) > 0 && (
+                  <div className="flex justify-between text-green-600 text-xs"><span>Store credit earned</span><span>{formatCurrency(viewBill.storeCreditEarned!)}</span></div>
                 )}
                 <div className="flex justify-between font-bold text-gray-900 text-base border-t pt-2 mt-2">
                   <span>Total</span><span>{formatCurrency(viewBill.total)}</span>

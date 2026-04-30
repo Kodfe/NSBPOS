@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { Keyboard, Store, Clock, Wifi, WifiOff, Receipt } from 'lucide-react';
+import { Keyboard, Store, Clock, Wifi, WifiOff, Receipt, Monitor, LockKeyhole, LogOut } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
 
@@ -16,14 +16,23 @@ import BillSearchModal from '@/components/pos/BillSearchModal';
 import ReturnModal from '@/components/pos/ReturnModal';
 
 import { usePOS } from '@/hooks/usePOS';
-import { getProductByBarcode, generateBillNumber, subscribeProducts } from '@/lib/firestore';
+import { getAllBills, getProductByBarcode, generateBillNumber, subscribeProducts } from '@/lib/firestore';
 import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
 import { db } from '@/lib/firebase';
-import { addStoreCredit, updateCustomerStats } from '@/lib/customers-firestore';
+import { addStoreCredit, deductStoreCredit, updateCustomerStats } from '@/lib/customers-firestore';
 import { cancelBill, returnStock, markBillAsAdjusted } from '@/lib/firestore';
 import { getCategories } from '@/lib/categories-firestore';
+import { getMachines, startMachineSession, stopMachineSession, verifyOperatorPin } from '@/lib/admin-firestore';
 import { normalizeBarcode } from '@/lib/utils';
-import { Bill, PaymentDetails, Product, Category, StoreSettings } from '@/types';
+import { Bill, PaymentDetails, Product, Category, StoreSettings, POSMachine, Operator } from '@/types';
+
+const POS_SESSION_KEY = 'nsb_pos_machine_session';
+
+type PosSession = {
+  machine: POSMachine;
+  operator: Operator;
+  startedAt: string;
+};
 
 export default function POSPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -38,12 +47,46 @@ export default function POSPage() {
   const [storeSettings, setStoreSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [showBillSearch, setShowBillSearch] = useState(false);
   const [returnBill, setReturnBill] = useState<Bill | null>(null);
+  const [machines, setMachines] = useState<POSMachine[]>([]);
+  const [selectedMachineId, setSelectedMachineId] = useState('');
+  const [operatorPin, setOperatorPin] = useState('');
+  const [posSession, setPosSession] = useState<PosSession | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [loginLoading, setLoginLoading] = useState(false);
 
   const pos = usePOS();
 
   // Load store settings
   useEffect(() => {
     loadSettings().then(s => setStoreSettings(s));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadMachineLock() {
+      try {
+        const [machineData] = await Promise.all([getMachines()]);
+        if (!active) return;
+        setMachines(machineData);
+        setSelectedMachineId(machineData.find(m => !m.isActive)?.id || machineData[0]?.id || '');
+        const saved = localStorage.getItem(POS_SESSION_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved) as PosSession;
+          const liveMachine = machineData.find(m => m.id === parsed.machine.id);
+          if (liveMachine?.isActive && liveMachine.currentOperatorId === parsed.operator.id) {
+            setPosSession({ ...parsed, machine: liveMachine });
+          } else {
+            localStorage.removeItem(POS_SESSION_KEY);
+          }
+        }
+      } catch {
+        toast.error('Could not load POS machines');
+      } finally {
+        if (active) setSessionLoading(false);
+      }
+    }
+    void loadMachineLock();
+    return () => { active = false; };
   }, []);
 
   // Subscribe to live products from Firestore
@@ -128,13 +171,21 @@ export default function POSPage() {
       try { billNumber = await generateBillNumber(); }
       catch { billNumber = `NSB${Date.now()}`; }
 
-      const finalBill = await pos.processSale(payment, billNumber);
+      const finalBill = await pos.processSale(payment, billNumber, posSession ? {
+        machineId: posSession.machine.id,
+        machineName: posSession.machine.name,
+        operatorId: posSession.operator.id,
+        operatorName: posSession.operator.name,
+      } : undefined);
       if (finalBill) {
         setShowPayment(false);
 
         // Update customer stats & handle store credit silently
         if (finalBill.customer?.id) {
           try { await updateCustomerStats(finalBill.customer.id, finalBill.total); } catch {}
+          if ((finalBill.storeCreditApplied ?? 0) > 0) {
+            try { await deductStoreCredit(finalBill.customer.id, finalBill.storeCreditApplied!); } catch {}
+          }
           // If cashier chose to save change as credit, do it now
           if (payment.saveCreditAmount && payment.saveCreditAmount > 0) {
             try {
@@ -150,13 +201,71 @@ export default function POSPage() {
         }
 
         setCompletedBill(finalBill);
+        pos.openNewAfterSale();
         toast.success('Payment successful!');
       }
     } catch (err) {
       toast.error('Payment failed. Please try again.');
       console.error(err);
     }
-  }, [pos]);
+  }, [pos, posSession]);
+
+  const handleStartSession = useCallback(async () => {
+    const machine = machines.find(m => m.id === selectedMachineId);
+    if (!machine) { toast.error('Select a POS machine'); return; }
+    if (operatorPin.length !== 2) { toast.error('Enter operator 2-digit PIN'); return; }
+    setLoginLoading(true);
+    try {
+      const operator = await verifyOperatorPin(operatorPin);
+      if (!operator) { toast.error('Invalid or inactive operator PIN'); return; }
+      if (operator.assignedMachineId && operator.assignedMachineId !== machine.id) {
+        toast.error(`${operator.name} is assigned to ${operator.assignedMachineName || 'another machine'}`);
+        return;
+      }
+      if (machine.isActive && machine.currentOperatorId !== operator.id) {
+        toast.error(`${machine.name} is already active for ${machine.currentOperatorName || 'another operator'}`);
+        return;
+      }
+      if (!machine.isActive) await startMachineSession(machine, operator);
+      const session: PosSession = {
+        machine: { ...machine, isActive: true, currentOperatorId: operator.id, currentOperatorName: operator.name, sessionStartedAt: new Date() },
+        operator,
+        startedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(POS_SESSION_KEY, JSON.stringify(session));
+      setPosSession(session);
+      setOperatorPin('');
+      toast.success(`POS unlocked: ${machine.name} - ${operator.name}`);
+    } catch {
+      toast.error('Could not start POS session');
+    } finally {
+      setLoginLoading(false);
+    }
+  }, [machines, operatorPin, selectedMachineId]);
+
+  const handleStopSession = useCallback(async () => {
+    if (!posSession) return;
+    if (!confirm(`Lock POS and stop ${posSession.machine.name}?`)) return;
+    try {
+      const bills = await getAllBills();
+      const startedAt = new Date(posSession.startedAt);
+      const sessionBills = bills.filter(b =>
+        b.status === 'paid' &&
+        b.machineId === posSession.machine.id &&
+        b.operatorId === posSession.operator.id &&
+        !!b.paidAt &&
+        b.paidAt >= startedAt
+      );
+      await stopMachineSession(posSession.machine, sessionBills.length, sessionBills.reduce((sum, b) => sum + b.total, 0));
+      localStorage.removeItem(POS_SESSION_KEY);
+      setPosSession(null);
+      pos.clearBill();
+      setMachines(await getMachines());
+      toast.success('POS session stopped');
+    } catch {
+      toast.error('Could not stop POS session');
+    }
+  }, [pos, posSession]);
 
   const handleNewBill = useCallback(() => {
     setCompletedBill(null);
@@ -198,6 +307,72 @@ export default function POSPage() {
     );
   }
 
+  if (sessionLoading || !posSession) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <Toaster position="top-right" toastOptions={{ duration: 2000 }} />
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          <div className="bg-saffron-400 px-6 py-5 text-white">
+            <div className="flex items-center gap-2">
+              <LockKeyhole size={20} />
+              <h1 className="text-lg font-bold">POS Locked</h1>
+            </div>
+            <p className="text-sm text-saffron-100 mt-1">Select machine and login with operator PIN to start billing.</p>
+          </div>
+          <div className="p-6 space-y-4">
+            {sessionLoading ? (
+              <div className="py-8 text-center text-sm text-gray-400">Loading machines...</div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">POS Machine</label>
+                  <select
+                    value={selectedMachineId}
+                    onChange={e => setSelectedMachineId(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-saffron-400"
+                  >
+                    <option value="">Select machine</option>
+                    {machines.map(machine => (
+                      <option key={machine.id} value={machine.id}>
+                        {machine.name}{machine.label ? ` - ${machine.label}` : ''}{machine.isActive ? ` (active: ${machine.currentOperatorName || 'operator'})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Operator PIN</label>
+                  <input
+                    autoFocus
+                    inputMode="numeric"
+                    maxLength={2}
+                    value={operatorPin}
+                    onChange={e => setOperatorPin(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                    onKeyDown={e => { if (e.key === 'Enter') void handleStartSession(); }}
+                    className="w-full px-3 py-3 border-2 border-gray-200 rounded-xl text-center text-3xl font-mono tracking-[0.5em] focus:outline-none focus:border-saffron-400"
+                    placeholder="00"
+                  />
+                </div>
+                {machines.length === 0 && (
+                  <p className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-xl">
+                    No POS machines found. Add one from Admin - POS Machines first.
+                  </p>
+                )}
+                <button
+                  onClick={handleStartSession}
+                  disabled={!selectedMachineId || operatorPin.length !== 2 || loginLoading}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-saffron-400 hover:bg-saffron-500 disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold rounded-xl"
+                >
+                  {loginLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Monitor size={16} />}
+                  Start POS
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       <Toaster position="top-right" toastOptions={{ duration: 2000 }} />
@@ -208,7 +383,9 @@ export default function POSPage() {
           <Store size={22} />
           <div>
             <h1 className="text-base font-bold leading-tight">{storeSettings.storeName}</h1>
-            <p className="text-[11px] text-saffron-100">{storeSettings.tagline || 'Supermarket Billing System'}</p>
+            <p className="text-[11px] text-saffron-100">
+              {posSession.machine.name} - {posSession.operator.name}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -225,6 +402,12 @@ export default function POSPage() {
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs transition-colors"
           >
             <Receipt size={14} /> Bills
+          </button>
+          <button
+            onClick={handleStopSession}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs transition-colors"
+          >
+            <LogOut size={14} /> Lock
           </button>
           <button
             onClick={() => setShowShortcuts(true)}
