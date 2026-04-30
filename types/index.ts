@@ -176,6 +176,8 @@ export interface Operator {
   phone?: string;
   assignedMachineId?: string;
   assignedMachineName?: string;
+  currentMachineId?: string;
+  currentMachineName?: string;
   isActive: boolean;
   createdAt: Date;
   lastLoginAt?: Date;

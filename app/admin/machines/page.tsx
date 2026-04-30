@@ -23,7 +23,8 @@ export default function MachinesPage() {
     try {
       const [m, o] = await Promise.all([getMachines(), getOperators()]);
       setMachines(m);
-      setOperators(o.filter(op => op.isActive));
+      const activeOperatorIds = new Set(m.filter(machine => machine.isActive && machine.currentOperatorId).map(machine => machine.currentOperatorId));
+      setOperators(o.filter(op => op.isActive && !activeOperatorIds.has(op.id)));
     } catch {
       // offline — show empty
     }
@@ -63,6 +64,11 @@ export default function MachinesPage() {
     if (!op) return;
     setStarting(true);
     try {
+      const activeOperatorMachine = machines.find(m => m.isActive && m.currentOperatorId === op.id && m.id !== showStartModal.id);
+      if (activeOperatorMachine) {
+        toast.error(`${op.name} is already active on ${activeOperatorMachine.name}`);
+        return;
+      }
       await startMachineSession(showStartModal, op);
       toast.success(`Session started — ${op.name} on ${showStartModal.name}`);
       setShowStartModal(null);

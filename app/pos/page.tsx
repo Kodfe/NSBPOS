@@ -218,6 +218,11 @@ export default function POSPage() {
     try {
       const operator = await verifyOperatorPin(operatorPin);
       if (!operator) { toast.error('Invalid or inactive operator PIN'); return; }
+      const activeOperatorMachine = machines.find(m => m.isActive && m.currentOperatorId === operator.id && m.id !== machine.id);
+      if (activeOperatorMachine) {
+        toast.error(`${operator.name} is already active on ${activeOperatorMachine.name}`);
+        return;
+      }
       if (operator.assignedMachineId && operator.assignedMachineId !== machine.id) {
         toast.error(`${operator.name} is assigned to ${operator.assignedMachineName || 'another machine'}`);
         return;

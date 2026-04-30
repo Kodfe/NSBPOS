@@ -70,6 +70,18 @@ export async function deleteMachine(id: string): Promise<void> {
 
 export async function startMachineSession(machine: POSMachine, operator: Operator): Promise<void> {
   const now = new Date();
+  const activeOperatorSession = query(
+    collection(db, 'machines'),
+    where('isActive', '==', true),
+    where('currentOperatorId', '==', operator.id),
+    limit(1),
+  );
+  const activeSnap = await getDocs(activeOperatorSession);
+  if (!activeSnap.empty && activeSnap.docs[0].id !== machine.id) {
+    const activeMachine = activeSnap.docs[0].data();
+    throw new Error(`${operator.name} is already active on ${activeMachine.name || 'another machine'}`);
+  }
+
   await updateDoc(doc(db, 'machines', machine.id), {
     isActive: true,
     currentOperatorId: operator.id,
@@ -84,7 +96,11 @@ export async function startMachineSession(machine: POSMachine, operator: Operato
     action: 'start',
     timestamp: Timestamp.fromDate(now),
   });
-  await updateDoc(doc(db, 'operators', operator.id), { lastLoginAt: Timestamp.fromDate(now) });
+  await updateDoc(doc(db, 'operators', operator.id), {
+    lastLoginAt: Timestamp.fromDate(now),
+    currentMachineId: machine.id,
+    currentMachineName: machine.name,
+  });
 }
 
 export async function stopMachineSession(machine: POSMachine, billsCount: number, totalSales: number): Promise<void> {
@@ -100,6 +116,12 @@ export async function stopMachineSession(machine: POSMachine, billsCount: number
     currentOperatorName: null,
     sessionStartedAt: null,
   });
+  if (machine.currentOperatorId) {
+    await updateDoc(doc(db, 'operators', machine.currentOperatorId), {
+      currentMachineId: null,
+      currentMachineName: null,
+    });
+  }
   await addDoc(collection(db, 'machineLogs'), {
     machineId: machine.id,
     machineName: machine.name,
@@ -154,7 +176,7 @@ export async function getMachineLogs(filters?: {
   let q = query(collection(db, 'machineLogs'), orderBy('timestamp', 'desc'), limit(200));
   const snap = await getDocs(q);
   let logs = snap.docs.map(d => ({
-    id: d.id, ...d.data(), timestamp: d.data().timestamp?.toDate(),
+    id: d.id, ...d.data(), timestamp: parseDateValue(d.data().timestamp) || new Date(),
   } as MachineLog));
   if (filters?.machineId) logs = logs.filter(l => l.machineId === filters.machineId);
   if (filters?.operatorId) logs = logs.filter(l => l.operatorId === filters.operatorId);
