@@ -4,12 +4,13 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Package, Monitor, Users, FileText,
   Store, ShoppingCart, LogOut, ChevronRight, Settings,
-  UserCircle, Tag, Receipt, ShoppingBag, BarChart2,
+  UserCircle, Tag, Receipt, ShoppingBag, BarChart2, UploadCloud,
 } from 'lucide-react';
 
 const NAV = [
   { href: '/admin/dashboard',  label: 'Dashboard',    icon: LayoutDashboard, desc: 'Sales & analytics',      group: '' },
   { href: '/admin/products',   label: 'Products',     icon: Package,         desc: 'Manage inventory',       group: '' },
+  { href: '/admin/billbook-migrator', label: 'BillBook Migrator', icon: UploadCloud, desc: 'Import old Excel stock', group: '' },
   { href: '/admin/categories', label: 'Categories',   icon: Tag,             desc: 'Add / edit categories',  group: '' },
   { href: '/admin/customers',  label: 'Customers',    icon: UserCircle,      desc: 'Customer accounts',      group: '' },
   { href: '/admin/bills',      label: 'Bills',        icon: Receipt,         desc: 'View & search bills',    group: '' },
