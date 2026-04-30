@@ -8,6 +8,7 @@ import { formatCurrency, normalizeBarcode } from '@/lib/utils';
 import { getAllProducts, adminAddProduct, adminUpdateProduct } from '@/lib/admin-firestore';
 import { getCategories } from '@/lib/categories-firestore';
 import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
+import { createGeneratedBarcode, downloadBarcodeSvg } from '@/lib/barcodes';
 import {
   getParties, createParty, updateParty, deleteParty,
   getPurchaseBills, createPurchaseBill, updatePurchaseBill, deletePurchaseBill,
@@ -451,6 +452,26 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   function openProductModal(seed?: Partial<Product>) {
     setProductForm(emptyProductForm(categories, seed));
     setShowProductModal(true);
+  }
+
+  function generateProductBarcode() {
+    const barcode = createGeneratedBarcode(products);
+    setProductForm(f => ({ ...f, barcode }));
+    toast.success('Barcode generated');
+  }
+
+  function downloadProductBarcode() {
+    const barcode = normalizeBarcode(productForm.barcode) || createGeneratedBarcode(products);
+    if (!/^\d{13}$/.test(barcode)) {
+      toast.error('Download supports generated 13-digit barcodes');
+      return;
+    }
+    if (!productForm.barcode) setProductForm(f => ({ ...f, barcode }));
+    if (!downloadBarcodeSvg(barcode, productForm.name)) {
+      toast.error('Could not create barcode');
+      return;
+    }
+    toast.success('Barcode downloaded');
   }
 
   async function handleCreateProduct() {
@@ -1093,7 +1114,29 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
             </div>
             <div className="flex-1 overflow-y-auto p-6 grid grid-cols-2 gap-4">
               <div className="col-span-2"><Label>Product Name *</Label><input value={productForm.name} onChange={e => setProductForm(f => ({ ...f, name: e.target.value }))} className="input" autoFocus /></div>
-              <div><Label>Barcode</Label><input value={productForm.barcode || ''} onChange={e => setProductForm(f => ({ ...f, barcode: normalizeBarcode(e.target.value) }))} className="input" /></div>
+              <div className="col-span-2">
+                <Label>Barcode</Label>
+                <div className="flex gap-2">
+                  <input value={productForm.barcode || ''} onChange={e => setProductForm(f => ({ ...f, barcode: normalizeBarcode(e.target.value) }))} className="input flex-1" placeholder="Scan, type, or generate barcode" />
+                  <button
+                    type="button"
+                    onClick={generateProductBarcode}
+                    title="Generate barcode"
+                    className="h-10 w-10 flex items-center justify-center rounded-xl border border-saffron-200 text-saffron-600 hover:bg-saffron-50 transition-colors"
+                  >
+                    <ScanBarcode size={17} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadProductBarcode}
+                    title="Download barcode label"
+                    className="h-10 w-10 flex items-center justify-center rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    <Download size={17} />
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-gray-400">Generate and download a printable barcode for custom products.</p>
+              </div>
               <div><Label>Brand</Label><input value={productForm.brand || ''} onChange={e => setProductForm(f => ({ ...f, brand: e.target.value }))} className="input" /></div>
               <div><Label>Purchase Price</Label><input type="number" value={productForm.purchasePrice ?? 0} onChange={e => setProductForm(f => ({ ...f, purchasePrice: parseFloat(e.target.value) || 0 }))} className="input" min="0" step="0.01" /></div>
               <div><Label>Selling Price</Label><input type="number" value={productForm.price} onChange={e => setProductForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} className="input" min="0" step="0.01" /></div>
