@@ -454,12 +454,6 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
     setShowProductModal(true);
   }
 
-  function generateProductBarcode() {
-    const barcode = createGeneratedBarcode(products);
-    setProductForm(f => ({ ...f, barcode }));
-    toast.success('Barcode generated');
-  }
-
   function downloadProductBarcode() {
     const barcode = normalizeBarcode(productForm.barcode) || createGeneratedBarcode(products);
     if (!/^\d{13}$/.test(barcode)) {
@@ -1120,17 +1114,9 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                   <input value={productForm.barcode || ''} onChange={e => setProductForm(f => ({ ...f, barcode: normalizeBarcode(e.target.value) }))} className="input flex-1" placeholder="Scan, type, or generate barcode" />
                   <button
                     type="button"
-                    onClick={generateProductBarcode}
-                    title="Generate barcode"
-                    className="h-10 w-10 flex items-center justify-center rounded-xl border border-saffron-200 text-saffron-600 hover:bg-saffron-50 transition-colors"
-                  >
-                    <ScanBarcode size={17} />
-                  </button>
-                  <button
-                    type="button"
                     onClick={downloadProductBarcode}
-                    title="Download barcode label"
-                    className="h-10 w-10 flex items-center justify-center rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                    title="Generate and download barcode label"
+                    className="h-10 w-10 flex items-center justify-center rounded-xl border border-saffron-200 text-saffron-600 hover:bg-saffron-50 transition-colors"
                   >
                     <Download size={17} />
                   </button>

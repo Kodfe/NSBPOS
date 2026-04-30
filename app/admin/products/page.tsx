@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Download, Upload, Pencil, Trash2, Scale, X, Check, AlertTriangle, FileText, ScanBarcode } from 'lucide-react';
+import { Plus, Search, Download, Upload, Pencil, Trash2, Scale, X, Check, AlertTriangle, FileText } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
@@ -116,12 +116,6 @@ export default function ProductsPage() {
 
   function openAdd() { setEditing(null); setForm(emptyProduct(categories)); setShowModal(true); }
   function openEdit(p: Product) { setEditing(p); setForm({ ...p }); setShowModal(true); }
-
-  function generateBarcode() {
-    const barcode = createGeneratedBarcode(products);
-    setForm(f => ({ ...f, barcode }));
-    toast.success('Barcode generated');
-  }
 
   function downloadBarcodeLabel() {
     const barcode = form.barcode?.trim() || createGeneratedBarcode(products);
@@ -404,17 +398,9 @@ export default function ProductsPage() {
                       className="input flex-1" placeholder="Scan, type, or generate barcode" />
                     <button
                       type="button"
-                      onClick={generateBarcode}
-                      title="Generate barcode"
-                      className="h-10 w-10 flex items-center justify-center rounded-xl border border-saffron-200 text-saffron-600 hover:bg-saffron-50 transition-colors"
-                    >
-                      <ScanBarcode size={17} />
-                    </button>
-                    <button
-                      type="button"
                       onClick={downloadBarcodeLabel}
-                      title="Download barcode label"
-                      className="h-10 w-10 flex items-center justify-center rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                      title="Generate and download barcode label"
+                      className="h-10 w-10 flex items-center justify-center rounded-xl border border-saffron-200 text-saffron-600 hover:bg-saffron-50 transition-colors"
                     >
                       <Download size={17} />
                     </button>
