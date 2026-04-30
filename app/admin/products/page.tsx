@@ -127,7 +127,7 @@ export default function ProductsPage() {
       return;
     }
     if (!form.barcode) setForm(f => ({ ...f, barcode }));
-    if (!downloadBarcodeSvg(barcode, form.name, storeSettings.storeName)) {
+    if (!downloadBarcodeSvg(barcode, form.name, storeSettings.storeName, { mrp: form.mrp, sellingPrice: form.price })) {
       toast.error('Could not create barcode');
       return;
     }

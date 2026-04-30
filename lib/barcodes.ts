@@ -54,18 +54,29 @@ function escapeSvgText(value: string) {
   })[char] || char);
 }
 
-export function barcodeLabelSvg(barcode: string, productName: string, storeName = '') {
+export function barcodeLabelSvg(
+  barcode: string,
+  productName: string,
+  storeName = '',
+  prices?: { mrp?: number; sellingPrice?: number },
+) {
   const bits = buildEan13Bits(barcode);
   if (!bits) return '';
   const moduleWidth = 2;
   const xStart = 24;
-  const barTop = 48;
-  const barHeight = 76;
-  const guardHeight = 88;
+  const barTop = 62;
+  const barHeight = 70;
+  const guardHeight = 82;
   const width = xStart * 2 + bits.length * moduleWidth;
-  const height = 176;
+  const height = 190;
   const storeLabel = escapeSvgText(storeName || 'Store');
   const productLabel = escapeSvgText(productName || 'Product');
+  const mrp = prices?.mrp ?? 0;
+  const sellingPrice = prices?.sellingPrice ?? 0;
+  const priceText = [
+    mrp > 0 ? `MRP: Rs ${mrp.toFixed(2)}` : '',
+    sellingPrice > 0 ? `Price: Rs ${sellingPrice.toFixed(2)}` : '',
+  ].filter(Boolean).join('   ');
 
   const bars = bits.split('').map((bit, index) => {
     if (bit !== '1') return '';
@@ -78,13 +89,19 @@ export function barcodeLabelSvg(barcode: string, productName: string, storeName 
   <rect width="100%" height="100%" fill="#ffffff"/>
   <text x="${width / 2}" y="18" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#111827">${storeLabel}</text>
   <text x="${width / 2}" y="34" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="600" fill="#374151">${productLabel}</text>
+  ${priceText ? `<text x="${width / 2}" y="50" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="#111827">${escapeSvgText(priceText)}</text>` : ''}
   ${bars}
-  <text x="${width / 2}" y="160" text-anchor="middle" font-family="Consolas, monospace" font-size="18" letter-spacing="2" fill="#111827">${barcode}</text>
+  <text x="${width / 2}" y="174" text-anchor="middle" font-family="Consolas, monospace" font-size="18" letter-spacing="2" fill="#111827">${barcode}</text>
 </svg>`;
 }
 
-export function downloadBarcodeSvg(barcode: string, productName: string, storeName = '') {
-  const svg = barcodeLabelSvg(barcode, productName, storeName);
+export function downloadBarcodeSvg(
+  barcode: string,
+  productName: string,
+  storeName = '',
+  prices?: { mrp?: number; sellingPrice?: number },
+) {
+  const svg = barcodeLabelSvg(barcode, productName, storeName, prices);
   if (!svg) return false;
   const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(blob);
