@@ -4,10 +4,11 @@ import { Plus, Search, Download, Upload, Pencil, Trash2, Scale, X, Check, AlertT
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
-import { Product, Category } from '@/types';
+import { Product, Category, StoreSettings } from '@/types';
 import { getAllProducts, adminAddProduct, adminUpdateProduct, adminDeleteProduct, bulkUpsertProducts } from '@/lib/admin-firestore';
 import { getCategories } from '@/lib/categories-firestore';
 import { createGeneratedBarcode, downloadBarcodeSvg } from '@/lib/barcodes';
+import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
 
 const UNITS = ['piece', 'kg', 'gm', 'ltr', 'ml', 'pack', 'dozen', 'box', 'bottle'];
 const GST_RATES = [0, 5, 12, 18, 28];
@@ -98,11 +99,13 @@ export default function ProductsPage() {
   const [bulkRows, setBulkRows] = useState<Omit<Product, 'id'>[]>([]);
   const [bulkSource, setBulkSource] = useState('CSV');
   const [uploading, setUploading] = useState(false);
+  const [storeSettings, setStoreSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadProducts();
     getCategories().then(setCategories);
+    loadSettings().then(setStoreSettings).catch(() => {});
   }, []);
 
   async function loadProducts() {
@@ -124,7 +127,7 @@ export default function ProductsPage() {
       return;
     }
     if (!form.barcode) setForm(f => ({ ...f, barcode }));
-    if (!downloadBarcodeSvg(barcode, form.name)) {
+    if (!downloadBarcodeSvg(barcode, form.name, storeSettings.storeName)) {
       toast.error('Could not create barcode');
       return;
     }

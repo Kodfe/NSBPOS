@@ -461,7 +461,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
       return;
     }
     if (!productForm.barcode) setProductForm(f => ({ ...f, barcode }));
-    if (!downloadBarcodeSvg(barcode, productForm.name)) {
+    if (!downloadBarcodeSvg(barcode, productForm.name, storeSettings.storeName)) {
       toast.error('Could not create barcode');
       return;
     }
