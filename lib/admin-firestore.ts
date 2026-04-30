@@ -21,6 +21,7 @@ function mapMachineDoc(id: string, data: Record<string, unknown>): POSMachine {
     ...data,
     createdAt: parseDateValue(data.createdAt) || new Date(),
     sessionStartedAt: parseDateValue(data.sessionStartedAt),
+    lastHeartbeatAt: parseDateValue(data.lastHeartbeatAt),
   } as POSMachine;
 }
 
@@ -46,7 +47,13 @@ function mapBillDoc(id: string, data: Record<string, unknown>): Bill {
 
 export async function getMachines(): Promise<POSMachine[]> {
   const snap = await getDocs(query(collection(db, 'machines'), orderBy('createdAt', 'asc')));
-  return snap.docs.map(d => mapMachineDoc(d.id, d.data()));
+  const machines = snap.docs.map(d => mapMachineDoc(d.id, d.data()));
+  const released = await releaseStaleMachineSessions(machines);
+  if (released > 0) {
+    const freshSnap = await getDocs(query(collection(db, 'machines'), orderBy('createdAt', 'asc')));
+    return freshSnap.docs.map(d => mapMachineDoc(d.id, d.data()));
+  }
+  return machines;
 }
 
 export function subscribeMachines(cb: (m: POSMachine[]) => void) {
@@ -87,6 +94,7 @@ export async function startMachineSession(machine: POSMachine, operator: Operato
     currentOperatorId: operator.id,
     currentOperatorName: operator.name,
     sessionStartedAt: Timestamp.fromDate(now),
+    lastHeartbeatAt: Timestamp.fromDate(now),
   });
   await addDoc(collection(db, 'machineLogs'), {
     machineId: machine.id,
@@ -103,7 +111,7 @@ export async function startMachineSession(machine: POSMachine, operator: Operato
   });
 }
 
-export async function stopMachineSession(machine: POSMachine, billsCount: number, totalSales: number): Promise<void> {
+export async function stopMachineSession(machine: POSMachine, billsCount: number, totalSales: number, notes?: string): Promise<void> {
   const now = new Date();
   const started = machine.sessionStartedAt;
   const durationMinutes = started
@@ -115,6 +123,7 @@ export async function stopMachineSession(machine: POSMachine, billsCount: number
     currentOperatorId: null,
     currentOperatorName: null,
     sessionStartedAt: null,
+    lastHeartbeatAt: null,
   });
   if (machine.currentOperatorId) {
     await updateDoc(doc(db, 'operators', machine.currentOperatorId), {
@@ -122,7 +131,7 @@ export async function stopMachineSession(machine: POSMachine, billsCount: number
       currentMachineName: null,
     });
   }
-  await addDoc(collection(db, 'machineLogs'), {
+  await addDoc(collection(db, 'machineLogs'), stripUndefined({
     machineId: machine.id,
     machineName: machine.name,
     operatorId: machine.currentOperatorId || '',
@@ -132,7 +141,8 @@ export async function stopMachineSession(machine: POSMachine, billsCount: number
     sessionDurationMinutes: durationMinutes,
     billsCount,
     totalSales,
-  });
+    notes,
+  }));
 }
 
 // ── Operators ─────────────────────────────────────────────────────────────────
@@ -146,6 +156,64 @@ export function subscribeOperators(cb: (o: Operator[]) => void) {
   return onSnapshot(query(collection(db, 'operators'), orderBy('createdAt', 'asc')), snap => {
     cb(snap.docs.map(d => mapOperatorDoc(d.id, d.data())));
   });
+}
+
+export async function updateMachineSessionHeartbeat(machineId: string, operatorId: string): Promise<void> {
+  const machineRef = doc(db, 'machines', machineId);
+  const snap = await getDoc(machineRef);
+  if (!snap.exists()) return;
+  const data = snap.data();
+  if (!data.isActive || data.currentOperatorId !== operatorId) return;
+  await updateDoc(machineRef, { lastHeartbeatAt: serverTimestamp() });
+}
+
+const STALE_MACHINE_SESSION_MS = 2 * 60 * 1000;
+
+async function releaseStaleMachineSessions(machines: POSMachine[]): Promise<number> {
+  const now = new Date();
+  const staleMachines = machines.filter(machine => {
+    if (!machine.isActive || !machine.currentOperatorId) return false;
+    const lastSeen = machine.lastHeartbeatAt || machine.sessionStartedAt;
+    if (!lastSeen) return true;
+    return now.getTime() - new Date(lastSeen).getTime() > STALE_MACHINE_SESSION_MS;
+  });
+
+  let released = 0;
+  for (const machine of staleMachines) {
+    try {
+      const sessionSales = await getMachineSessionSales(machine);
+      await stopMachineSession(
+        machine,
+        sessionSales.billsCount,
+        sessionSales.totalSales,
+        'Auto logged out after POS app/browser closed or heartbeat stopped',
+      );
+      released += 1;
+    } catch {
+      // Best-effort cleanup. The next load will retry stale active sessions.
+    }
+  }
+  return released;
+}
+
+async function getMachineSessionSales(machine: POSMachine): Promise<{ billsCount: number; totalSales: number }> {
+  if (!machine.sessionStartedAt || !machine.currentOperatorId) {
+    return { billsCount: 0, totalSales: 0 };
+  }
+  const snap = await getDocs(collection(db, 'bills'));
+  const bills = snap.docs
+    .map(d => mapBillDoc(d.id, d.data()))
+    .filter(bill =>
+      bill.status === 'paid' &&
+      bill.machineId === machine.id &&
+      bill.operatorId === machine.currentOperatorId &&
+      !!bill.paidAt &&
+      bill.paidAt >= machine.sessionStartedAt!
+    );
+  return {
+    billsCount: bills.length,
+    totalSales: bills.reduce((sum, bill) => sum + bill.total, 0),
+  };
 }
 
 export async function createOperator(data: Omit<Operator, 'id' | 'createdAt'>): Promise<string> {

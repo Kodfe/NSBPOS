@@ -165,6 +165,7 @@ export interface POSMachine {
   currentOperatorId?: string;
   currentOperatorName?: string;
   sessionStartedAt?: Date;
+  lastHeartbeatAt?: Date;
   location?: string;
   createdAt: Date;
 }

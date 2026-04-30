@@ -22,11 +22,14 @@ import { db } from '@/lib/firebase';
 import { addStoreCredit, deductStoreCredit, updateCustomerStats } from '@/lib/customers-firestore';
 import { cancelBill, returnStock, markBillAsAdjusted } from '@/lib/firestore';
 import { getCategories } from '@/lib/categories-firestore';
-import { getMachines, startMachineSession, stopMachineSession, verifyOperatorPin } from '@/lib/admin-firestore';
+import { getMachines, startMachineSession, stopMachineSession, updateMachineSessionHeartbeat, verifyOperatorPin } from '@/lib/admin-firestore';
 import { normalizeBarcode } from '@/lib/utils';
 import { Bill, PaymentDetails, Product, Category, StoreSettings, POSMachine, Operator } from '@/types';
 
 const POS_SESSION_KEY = 'nsb_pos_machine_session';
+const OPERATOR_INACTIVITY_LOGOUT_MS = 10 * 60 * 1000;
+const OPERATOR_HEARTBEAT_MS = 30 * 1000;
+const OPERATOR_ACTIVITY_EVENTS = ['keydown', 'mousedown', 'mousemove', 'touchstart', 'scroll', 'wheel', 'click'];
 
 type PosSession = {
   machine: POSMachine;
@@ -236,8 +239,9 @@ export default function POSPage() {
         return;
       }
       if (!machine.isActive) await startMachineSession(machine, operator);
+      await updateMachineSessionHeartbeat(machine.id, operator.id);
       const session: PosSession = {
-        machine: { ...machine, isActive: true, currentOperatorId: operator.id, currentOperatorName: operator.name, sessionStartedAt: new Date() },
+        machine: { ...machine, isActive: true, currentOperatorId: operator.id, currentOperatorName: operator.name, sessionStartedAt: new Date(), lastHeartbeatAt: new Date() },
         operator,
         startedAt: new Date().toISOString(),
       };
@@ -252,9 +256,9 @@ export default function POSPage() {
     }
   }, [machines, operatorPin, selectedMachineId]);
 
-  const handleStopSession = useCallback(async () => {
+  const endSession = useCallback(async ({ confirmStop = true, inactive = false }: { confirmStop?: boolean; inactive?: boolean } = {}) => {
     if (!posSession) return;
-    if (!confirm(`Lock POS and stop ${posSession.machine.name}?`)) return;
+    if (confirmStop && !confirm(`Lock POS and stop ${posSession.machine.name}?`)) return;
     try {
       const bills = await getAllBills();
       const startedAt = new Date(posSession.startedAt);
@@ -270,11 +274,66 @@ export default function POSPage() {
       setPosSession(null);
       pos.clearBill();
       setMachines(await getMachines());
-      toast.success('POS session stopped');
+      toast.success(inactive ? 'Operator logged out due to inactivity' : 'POS session stopped');
     } catch {
-      toast.error('Could not stop POS session');
+      toast.error(inactive ? 'Could not auto logout operator' : 'Could not stop POS session');
     }
   }, [pos, posSession]);
+
+  const handleStopSession = useCallback(async () => {
+    await endSession();
+  }, [endSession]);
+
+  useEffect(() => {
+    if (!posSession) return;
+
+    const heartbeat = () => {
+      void updateMachineSessionHeartbeat(posSession.machine.id, posSession.operator.id);
+    };
+    heartbeat();
+    const heartbeatId = setInterval(heartbeat, OPERATOR_HEARTBEAT_MS);
+
+    return () => clearInterval(heartbeatId);
+  }, [posSession]);
+
+  useEffect(() => {
+    if (!posSession) return;
+
+    const closeSession = () => {
+      void endSession({ confirmStop: false, inactive: true });
+    };
+
+    window.addEventListener('pagehide', closeSession);
+    window.addEventListener('beforeunload', closeSession);
+    return () => {
+      window.removeEventListener('pagehide', closeSession);
+      window.removeEventListener('beforeunload', closeSession);
+    };
+  }, [endSession, posSession]);
+
+  useEffect(() => {
+    if (!posSession) return;
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        void endSession({ confirmStop: false, inactive: true });
+      }, OPERATOR_INACTIVITY_LOGOUT_MS);
+    };
+
+    resetTimer();
+    OPERATOR_ACTIVITY_EVENTS.forEach(eventName => {
+      window.addEventListener(eventName, resetTimer, { passive: true });
+    });
+
+    return () => {
+      clearTimeout(timeoutId);
+      OPERATOR_ACTIVITY_EVENTS.forEach(eventName => {
+        window.removeEventListener(eventName, resetTimer);
+      });
+    };
+  }, [endSession, posSession]);
 
   const handleNewBill = useCallback(() => {
     setCompletedBill(null);
