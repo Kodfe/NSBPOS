@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Download, Upload, Pencil, Trash2, Scale, Package, X, Check, AlertTriangle, FileText } from 'lucide-react';
+import { Plus, Search, Download, Upload, Pencil, Trash2, Scale, X, Check, AlertTriangle, FileText, ScanBarcode } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
@@ -10,6 +10,23 @@ import { getCategories } from '@/lib/categories-firestore';
 
 const UNITS = ['piece', 'kg', 'gm', 'ltr', 'ml', 'pack', 'dozen', 'box', 'bottle'];
 const GST_RATES = [0, 5, 12, 18, 28];
+
+const EAN_LEFT_ODD: Record<string, string> = {
+  '0': '0001101', '1': '0011001', '2': '0010011', '3': '0111101', '4': '0100011',
+  '5': '0110001', '6': '0101111', '7': '0111011', '8': '0110111', '9': '0001011',
+};
+const EAN_LEFT_EVEN: Record<string, string> = {
+  '0': '0100111', '1': '0110011', '2': '0011011', '3': '0100001', '4': '0011101',
+  '5': '0111001', '6': '0000101', '7': '0010001', '8': '0001001', '9': '0010111',
+};
+const EAN_RIGHT: Record<string, string> = {
+  '0': '1110010', '1': '1100110', '2': '1101100', '3': '1000010', '4': '1011100',
+  '5': '1001110', '6': '1010000', '7': '1000100', '8': '1001000', '9': '1110100',
+};
+const EAN_PARITY: Record<string, string> = {
+  '0': 'LLLLLL', '1': 'LLGLGG', '2': 'LLGGLG', '3': 'LLGGGL', '4': 'LGLLGG',
+  '5': 'LGGLLG', '6': 'LGGGLL', '7': 'LGLGLG', '8': 'LGLGGL', '9': 'LGGLGL',
+};
 
 function emptyProduct(categories: Category[]): Omit<Product, 'id'> {
   return {
@@ -56,6 +73,66 @@ function parseUnit(value: unknown) {
   if (text.includes('bottle')) return 'bottle';
   if (text.includes('dozen')) return 'dozen';
   return 'piece';
+}
+
+function ean13Checksum(first12Digits: string) {
+  const sum = first12Digits.split('').reduce((total, digit, index) => {
+    const value = Number(digit);
+    return total + value * (index % 2 === 0 ? 1 : 3);
+  }, 0);
+  return String((10 - (sum % 10)) % 10);
+}
+
+function buildEan13Bits(code: string) {
+  if (!/^\d{13}$/.test(code)) return '';
+  const first = code[0];
+  const parity = EAN_PARITY[first];
+  const left = code.slice(1, 7).split('').map((digit, index) =>
+    parity[index] === 'L' ? EAN_LEFT_ODD[digit] : EAN_LEFT_EVEN[digit]
+  ).join('');
+  const right = code.slice(7).split('').map(digit => EAN_RIGHT[digit]).join('');
+  return `101${left}01010${right}101`;
+}
+
+function createGeneratedBarcode(existingProducts: Product[]) {
+  const existing = new Set(existingProducts.map(product => product.barcode).filter(Boolean));
+  for (let i = 0; i < 20; i += 1) {
+    const seed = `${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, '0')}`;
+    const first12 = `29${seed}`.slice(0, 12);
+    const barcode = `${first12}${ean13Checksum(first12)}`;
+    if (!existing.has(barcode)) return barcode;
+  }
+  const fallback = `29${Math.floor(Math.random() * 10_000_000_000).toString().padStart(10, '0')}`;
+  return `${fallback}${ean13Checksum(fallback)}`;
+}
+
+function barcodeLabelSvg(barcode: string, productName: string) {
+  const bits = buildEan13Bits(barcode);
+  if (!bits) return '';
+  const moduleWidth = 2;
+  const xStart = 24;
+  const barTop = 34;
+  const barHeight = 82;
+  const guardHeight = 94;
+  const width = xStart * 2 + bits.length * moduleWidth;
+  const height = 164;
+  const label = (productName || 'NSB Product').replace(/[<>&"]/g, char => ({
+    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;',
+  })[char] || char);
+
+  const bars = bits.split('').map((bit, index) => {
+    if (bit !== '1') return '';
+    const isGuard = index < 3 || (index >= 45 && index < 50) || index >= 92;
+    const x = xStart + index * moduleWidth;
+    return `<rect x="${x}" y="${barTop}" width="${moduleWidth}" height="${isGuard ? guardHeight : barHeight}" fill="#111827" />`;
+  }).join('');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="${width / 2}" y="20" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#111827">${label}</text>
+  ${bars}
+  <text x="${width / 2}" y="148" text-anchor="middle" font-family="Consolas, monospace" font-size="18" letter-spacing="2" fill="#111827">${barcode}</text>
+</svg>`;
 }
 
 function normalizeBillBookRows(rows: Record<string, unknown>[]) {
@@ -115,6 +192,35 @@ export default function ProductsPage() {
 
   function openAdd() { setEditing(null); setForm(emptyProduct(categories)); setShowModal(true); }
   function openEdit(p: Product) { setEditing(p); setForm({ ...p }); setShowModal(true); }
+
+  function generateBarcode() {
+    const barcode = createGeneratedBarcode(products);
+    setForm(f => ({ ...f, barcode }));
+    toast.success('Barcode generated');
+  }
+
+  function downloadBarcodeLabel() {
+    const barcode = form.barcode?.trim() || createGeneratedBarcode(products);
+    if (!/^\d{13}$/.test(barcode)) {
+      toast.error('Download supports generated 13-digit barcodes');
+      return;
+    }
+    if (!form.barcode) setForm(f => ({ ...f, barcode }));
+    const svg = barcodeLabelSvg(barcode, form.name);
+    if (!svg) {
+      toast.error('Could not create barcode');
+      return;
+    }
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const safeName = (form.name || 'product').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 40) || 'product';
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeName}-${barcode}-barcode.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Barcode downloaded');
+  }
 
   async function handleSave() {
     if (!form.name || form.price <= 0) { toast.error('Name and price are required'); return; }
@@ -376,10 +482,29 @@ export default function ProductsPage() {
                   <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                     className="input" placeholder="e.g. Amul Full Cream Milk 1L" />
                 </div>
-                <div>
+                <div className="col-span-2">
                   <label className="label">Barcode</label>
-                  <input value={form.barcode || ''} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))}
-                    className="input" placeholder="Scan or type barcode" />
+                  <div className="flex gap-2">
+                    <input value={form.barcode || ''} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))}
+                      className="input flex-1" placeholder="Scan, type, or generate barcode" />
+                    <button
+                      type="button"
+                      onClick={generateBarcode}
+                      title="Generate barcode"
+                      className="h-10 w-10 flex items-center justify-center rounded-xl border border-saffron-200 text-saffron-600 hover:bg-saffron-50 transition-colors"
+                    >
+                      <ScanBarcode size={17} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={downloadBarcodeLabel}
+                      title="Download barcode label"
+                      className="h-10 w-10 flex items-center justify-center rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                    >
+                      <Download size={17} />
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[11px] text-gray-400">Use generated barcode for custom products, then print and stick it on the item.</p>
                 </div>
                 <div>
                   <label className="label">Brand</label>
