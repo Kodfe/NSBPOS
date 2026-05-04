@@ -674,6 +674,7 @@ export default function POSPage() {
               onHoldBill={pos.holdBill}
               onOpenPayment={() => setShowPayment(true)}
               onOpenCustomer={() => setShowCustomer(true)}
+              onOpenBillSearch={() => setShowBillSearch(true)}
             />
           )}
         </div>

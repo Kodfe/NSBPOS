@@ -107,6 +107,22 @@ export default function BillingWorkspace({
     else onUpdateQuantity(product.id, Math.max(1, value));
   }
 
+  function stockStatus(product: Product, quantity = 0): 'negative' | 'low' | null {
+    const remaining = (product.stock ?? 0) - quantity;
+    if (remaining < 0) return 'negative';
+    if (remaining <= (product.minStock ?? 5)) return 'low';
+    return null;
+  }
+
+  function StockTag({ status }: { status: 'negative' | 'low' | null }) {
+    if (!status) return null;
+    return (
+      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${status === 'negative' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
+        {status === 'negative' ? 'Neg stock' : 'Low stock'}
+      </span>
+    );
+  }
+
   const filteredProducts = products
     .filter(product => {
       const term = search.trim().toLowerCase();
@@ -184,6 +200,7 @@ export default function BillingWorkspace({
                           Loose
                         </span>
                       )}
+                      <StockTag status={stockStatus(product)} />
                     </span>
                     <span className="text-[11px] text-gray-500">STOCK: {product.stock} {product.unit.toUpperCase()} &nbsp;&nbsp; PP: &#8377;{product.purchasePrice ?? 0}</span>
                   </span>
@@ -217,6 +234,7 @@ export default function BillingWorkspace({
             const quantityValue = item.product.isLoose ? (item.weightKg ?? item.quantity) : item.quantity;
             const qtyStep = item.product.isLoose ? 0.05 : 1;
             const unitLabel = item.product.isLoose ? 'kg' : item.product.unit;
+            const itemStockStatus = stockStatus(item.product, quantityValue);
 
             return (
               <div key={item.product.id} className="grid grid-cols-[54px_minmax(360px,1fr)_170px_105px_118px_180px_160px_48px] border-b border-gray-200 text-sm">
@@ -225,6 +243,7 @@ export default function BillingWorkspace({
                   <p className="truncate text-gray-900">{item.product.name}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
                     {item.product.isLoose && <span className="rounded bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">Loose item</span>}
+                    <StockTag status={itemStockStatus} />
                     <label className="flex h-7 items-center gap-1 rounded border border-gray-200 bg-white px-2 focus-within:border-saffron-400">
                       <input
                         type="number"

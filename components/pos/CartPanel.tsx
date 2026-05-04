@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Trash2, User, Pause, ShoppingCart, ChevronUp, ChevronDown, Scale, Pencil, FilePen } from 'lucide-react';
+import { AlertTriangle, Receipt, Trash2, User, Pause, ShoppingCart, ChevronUp, ChevronDown, Scale, Pencil, FilePen } from 'lucide-react';
 import { Bill, CartItem, Customer, StoreSettings } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import WeightModal from './WeightModal';
@@ -25,6 +25,7 @@ interface Props {
   onHoldBill: () => void;
   onOpenPayment: () => void;
   onOpenCustomer: () => void;
+  onOpenBillSearch?: () => void;
 }
 
 export default function CartPanel({
@@ -32,10 +33,18 @@ export default function CartPanel({
   adjustment, adjustmentNote, storeCreditApplied, originalBillTotal, showCartItems = true,
   onAdjustmentChange, onStoreCreditChange,
   onUpdateQuantity, onUpdateWeight, onUpdateDiscount,
-  onRemoveItem, onClearBill, onHoldBill, onOpenPayment, onOpenCustomer,
+  onRemoveItem, onClearBill, onHoldBill, onOpenPayment, onOpenCustomer, onOpenBillSearch,
 }: Props) {
   const hasItems = bill.items.length > 0;
   const typeCount = bill.items.length;
+  const stockWarnings = bill.items
+    .map(item => {
+      const remaining = (item.product.stock ?? 0) - (item.weightKg ?? item.quantity);
+      const minStock = item.product.minStock ?? 5;
+      const status = remaining < 0 ? 'negative' : remaining <= minStock ? 'low' : null;
+      return status ? { item, remaining, status } : null;
+    })
+    .filter(Boolean) as Array<{ item: CartItem; remaining: number; status: 'negative' | 'low' }>;
 
   // Modified-bill delta calculations
   const isModified = originalBillTotal !== undefined;
@@ -118,7 +127,76 @@ export default function CartPanel({
         )}
       </div>
       ) : (
-        <div className="flex-1" />
+        <div className="flex-1 overflow-y-auto bg-white p-3">
+          <div className="space-y-3">
+            <button
+              onClick={onOpenCustomer}
+              className="w-full rounded-lg border border-gray-200 bg-white p-3 text-left transition-colors hover:border-saffron-200 hover:bg-saffron-50/40"
+            >
+              <div className="flex items-center gap-2">
+                <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${customer ? 'bg-saffron-100 text-saffron-600' : 'bg-gray-100 text-gray-400'}`}>
+                  <User size={17} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-gray-900">Customer Manager</p>
+                  {customer ? (
+                    <p className="truncate text-xs text-gray-500">
+                      {customer.name} · {customer.phone}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500">Cash sale · add customer</p>
+                  )}
+                </div>
+                <span className="text-[11px] font-semibold text-saffron-600">F5</span>
+              </div>
+            </button>
+
+            <button
+              onClick={onOpenBillSearch}
+              className="w-full rounded-lg border border-gray-200 bg-white p-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50/40 disabled:opacity-50"
+              disabled={!onOpenBillSearch}
+            >
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <Receipt size={17} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-gray-900">Bill Search Manager</p>
+                  <p className="text-xs text-gray-500">Find, modify, exchange, or return bills</p>
+                </div>
+              </div>
+            </button>
+
+            <div className="rounded-lg border border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Stock Watch</p>
+                {stockWarnings.length > 0 && (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">{stockWarnings.length}</span>
+                )}
+              </div>
+              {stockWarnings.length === 0 ? (
+                <p className="px-3 py-4 text-xs text-gray-400">No low or negative stock in this bill.</p>
+              ) : (
+                <div className="divide-y divide-gray-200">
+                  {stockWarnings.slice(0, 6).map(({ item, remaining, status }) => (
+                    <div key={item.product.id} className="px-3 py-2">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle size={14} className={status === 'negative' ? 'mt-0.5 text-red-500' : 'mt-0.5 text-amber-500'} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-semibold text-gray-800">{item.product.name}</p>
+                          <p className="text-[11px] text-gray-500">After bill: {remaining.toFixed(item.product.isLoose ? 2 : 0)} {item.product.unit}</p>
+                        </div>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${status === 'negative' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
+                          {status === 'negative' ? 'NEG' : 'LOW'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Totals */}
