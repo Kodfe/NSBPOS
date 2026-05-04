@@ -58,6 +58,21 @@ function emptyPosProduct(categories: Category[], seed?: Partial<Product>): Omit<
   };
 }
 
+function uniqueProducts(products: Product[]): Product[] {
+  const seen = new Set<string>();
+  const unique: Product[] = [];
+
+  for (const product of products) {
+    const barcode = normalizeBarcode(product.barcode);
+    const key = barcode || `${product.name.trim().toLowerCase()}|${product.category.trim().toLowerCase()}|${product.price}|${product.mrp}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(product);
+  }
+
+  return unique;
+}
+
 export default function POSPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -83,18 +98,19 @@ export default function POSPage() {
   const [receiptAutoPrint, setReceiptAutoPrint] = useState(false);
 
   const pos = usePOS();
+  const uniqueProductList = useMemo(() => uniqueProducts(products), [products]);
   const productsByBarcode = useMemo(() => {
     const map = new Map<string, Product>();
-    for (const product of products) {
+    for (const product of uniqueProductList) {
       const barcode = normalizeBarcode(product.barcode);
-      if (barcode) map.set(barcode, product);
+      if (barcode && !map.has(barcode)) map.set(barcode, product);
     }
     return map;
-  }, [products]);
+  }, [uniqueProductList]);
   const modifiedCartProductIds = new Set(pos.activeBill?.originalBillId ? pos.activeBill.items.map(item => item.product.id) : []);
   const productSearchProducts = pos.activeBill?.originalBillId
-    ? products.filter(product => !modifiedCartProductIds.has(product.id))
-    : products;
+    ? uniqueProductList.filter(product => !modifiedCartProductIds.has(product.id))
+    : uniqueProductList;
 
   // Load store settings
   useEffect(() => {
@@ -296,6 +312,7 @@ export default function POSPage() {
   // Keyboard shortcuts
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
+      if (document.querySelector('[data-pos-modal="true"]')) return;
       if (e.altKey && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         document.querySelector<HTMLInputElement>('[placeholder*="Search item"]')?.focus();

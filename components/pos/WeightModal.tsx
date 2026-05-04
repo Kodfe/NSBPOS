@@ -25,6 +25,8 @@ export default function WeightModal({ product, currentWeight, onConfirm, onClose
   // Focus trap — close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
       if (e.key === 'Escape') onClose();
       else if (e.key === 'Enter') {
         const w = parseFloat(input);
@@ -35,8 +37,8 @@ export default function WeightModal({ product, currentWeight, onConfirm, onClose
         handlePress(e.key);
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input]);
 
@@ -67,6 +69,7 @@ export default function WeightModal({ product, currentWeight, onConfirm, onClose
 
   return (
     <div
+      data-pos-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
