@@ -1,5 +1,5 @@
 'use client';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { X, Printer } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { Bill, StoreSettings } from '@/types';
@@ -11,11 +11,18 @@ interface Props {
   settings?: StoreSettings;
   onClose: () => void;
   onNewBill: () => void;
+  autoPrint?: boolean;
 }
 
-export default function ReceiptModal({ bill, settings = DEFAULT_SETTINGS, onClose, onNewBill }: Props) {
+export default function ReceiptModal({ bill, settings = DEFAULT_SETTINGS, onClose, onNewBill, autoPrint = false }: Props) {
   const receiptRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({ contentRef: receiptRef });
+
+  useEffect(() => {
+    if (!autoPrint) return;
+    const timer = window.setTimeout(() => handlePrint(), 250);
+    return () => window.clearTimeout(timer);
+  }, [autoPrint, handlePrint]);
 
   // "You Saved" calculation: MRP − actual paid, per line
   const totalSavings = bill.items.reduce((sum, item) => {

@@ -131,6 +131,17 @@ export function usePOS() {
     }));
   }, [updateActiveBill]);
 
+  const updateItemPrice = useCallback((productId: string, price: number) => {
+    updateActiveBill(bill => ({
+      ...bill,
+      items: bill.items.map(i =>
+        i.product.id === productId
+          ? calcCartItem({ ...i.product, price: Math.max(0, price) }, i.quantity, i.discount, i.discountAmount ?? 0)
+          : i
+      ),
+    }));
+  }, [updateActiveBill]);
+
   // ── Adjustment & Store Credit ──────────────────────────────────────────────
 
   const setAdjustment = useCallback((amount: number, note: string) => {
@@ -262,6 +273,7 @@ export function usePOS() {
     updateQuantity,
     updateWeight,
     updateDiscount,
+    updateItemPrice,
     setAdjustment,
     setStoreCreditApplied,
     clearBill,

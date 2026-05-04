@@ -80,6 +80,7 @@ export default function POSPage() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [productForm, setProductForm] = useState<Omit<Product, 'id'>>(emptyPosProduct([]));
   const [addingProduct, setAddingProduct] = useState(false);
+  const [receiptAutoPrint, setReceiptAutoPrint] = useState(false);
 
   const pos = usePOS();
   const modifiedCartProductIds = new Set(pos.activeBill?.originalBillId ? pos.activeBill.items.map(item => item.product.id) : []);
@@ -145,33 +146,6 @@ export default function POSPage() {
     window.addEventListener('offline', onOffline);
     return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); };
   }, []);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') {
-        if (e.key === 'Escape') (e.target as HTMLInputElement).blur();
-        return;
-      }
-      switch (e.key) {
-        case 'F2': e.preventDefault(); document.querySelector<HTMLInputElement>('[placeholder*="Search"]')?.focus(); break;
-        case 'F3': e.preventDefault(); if (pos.activeBill?.items.length) setShowPayment(true); break;
-        case 'F4': e.preventDefault(); pos.addTab(); break;
-        case 'F5': e.preventDefault(); pos.holdBill(); break;
-        case 'F6': e.preventDefault(); pos.clearBill(); break;
-        case 'F7': e.preventDefault(); setShowCustomer(true); break;
-        case 'F1': case '?': e.preventDefault(); setShowShortcuts(s => !s); break;
-        case 'Escape': setShowPayment(false); setShowCustomer(false); setShowShortcuts(false); break;
-        case '1': case '2': case '3': case '4': case '5':
-          const idx = parseInt(e.key) - 1;
-          if (pos.tabs[idx]) pos.setActiveTabId(pos.tabs[idx].id);
-          break;
-      }
-    }
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [pos]);
 
   const handleBarcodeSearch = useCallback(async (barcode: string) => {
     const normalizedBarcode = normalizeBarcode(barcode);
@@ -261,6 +235,7 @@ export default function POSPage() {
           try { await markBillAsAdjusted(finalBill.originalBillId, finalBill.id, finalBill.billNumber); } catch {}
         }
 
+        setReceiptAutoPrint(false);
         setCompletedBill(finalBill);
         pos.openNewAfterSale();
         toast.success('Payment successful!');
@@ -270,6 +245,81 @@ export default function POSPage() {
       console.error(err);
     }
   }, [pos, posSession]);
+
+  const quickSaveBill = useCallback(async (print: boolean) => {
+    if (!pos.activeBill?.items.length) return;
+    try {
+      let billNumber: string;
+      try { billNumber = await generateBillNumber(); }
+      catch { billNumber = `NSB${Date.now()}`; }
+      const payment: PaymentDetails = {
+        method: 'cash',
+        amountPaid: pos.activeBill.total,
+        cashAmount: pos.activeBill.total,
+        change: 0,
+      };
+      const finalBill = await pos.processSale(payment, billNumber, posSession ? {
+        machineId: posSession.machine.id,
+        machineName: posSession.machine.name,
+        operatorId: posSession.operator.id,
+        operatorName: posSession.operator.name,
+      } : undefined);
+      if (!finalBill) return;
+
+      if (finalBill.customer?.id) {
+        try { await updateCustomerStats(finalBill.customer.id, finalBill.total); } catch {}
+        if ((finalBill.storeCreditApplied ?? 0) > 0) {
+          try { await deductStoreCredit(finalBill.customer.id, finalBill.storeCreditApplied!); } catch {}
+        }
+      }
+      if (finalBill.originalBillId) {
+        try { await markBillAsAdjusted(finalBill.originalBillId, finalBill.id, finalBill.billNumber); } catch {}
+      }
+
+      setReceiptAutoPrint(print);
+      if (print) setCompletedBill(finalBill);
+      pos.openNewAfterSale();
+      toast.success(print ? 'Bill saved and ready to print' : 'Bill saved without printing');
+    } catch {
+      toast.error('Could not save bill');
+    }
+  }, [pos, posSession]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        document.querySelector<HTMLInputElement>('[placeholder*="Search item"]')?.focus();
+        return;
+      }
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') {
+        if (e.key === 'Escape') (e.target as HTMLInputElement).blur();
+        return;
+      }
+      switch (e.key) {
+        case 'F2': e.preventDefault(); document.querySelector<HTMLInputElement>('[placeholder*="Search item"]')?.focus(); break;
+        case 'F3': e.preventDefault(); if (pos.activeBill?.items.length) setShowPayment(true); break;
+        case 'F4': e.preventDefault(); pos.addTab(); break;
+        case 'F5': e.preventDefault(); pos.holdBill(); break;
+        case 'F6': e.preventDefault(); void quickSaveBill(true); break;
+        case 'F7': e.preventDefault(); void quickSaveBill(false); break;
+        case 'F1': case '?': e.preventDefault(); setShowShortcuts(s => !s); break;
+        case 'Escape': setShowPayment(false); setShowCustomer(false); setShowShortcuts(false); break;
+        case 'Delete':
+          e.preventDefault();
+          if (pos.activeBill?.items.length) pos.removeItem(pos.activeBill.items[pos.activeBill.items.length - 1].product.id);
+          break;
+        case '1': case '2': case '3': case '4': case '5':
+          const idx = parseInt(e.key) - 1;
+          if (pos.tabs[idx]) pos.setActiveTabId(pos.tabs[idx].id);
+          break;
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [pos, quickSaveBill]);
 
   const handleStartSession = useCallback(async () => {
     const machine = machines.find(m => m.id === selectedMachineId);
@@ -568,6 +618,7 @@ export default function POSPage() {
               onBarcodeSearch={handleBarcodeSearch}
               onCreateProduct={openProductModal}
               onUpdateQuantity={pos.updateQuantity}
+              onUpdatePrice={pos.updateItemPrice}
               onUpdateDiscount={pos.updateDiscount}
               onRemoveItem={pos.removeItem}
               onClearBill={pos.clearBill}
@@ -656,6 +707,7 @@ export default function POSPage() {
         <ReceiptModal
           bill={completedBill}
           settings={storeSettings}
+          autoPrint={receiptAutoPrint}
           onClose={() => setCompletedBill(null)}
           onNewBill={handleNewBill}
         />

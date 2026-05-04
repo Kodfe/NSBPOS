@@ -16,6 +16,7 @@ interface Props {
   onBarcodeSearch: (barcode: string) => void;
   onCreateProduct?: (seed?: Partial<Product>) => void;
   onUpdateQuantity: (id: string, qty: number) => void;
+  onUpdatePrice: (id: string, price: number) => void;
   onUpdateDiscount: (id: string, discount: number, discountAmount?: number) => void;
   onRemoveItem: (id: string) => void;
   onClearBill: () => void;
@@ -32,6 +33,7 @@ export default function BillingWorkspace({
   onBarcodeSearch,
   onCreateProduct,
   onUpdateQuantity,
+  onUpdatePrice,
   onUpdateDiscount,
   onRemoveItem,
   onClearBill,
@@ -40,9 +42,35 @@ export default function BillingWorkspace({
   const [category, setCategory] = useState('All');
   const [weightProduct, setWeightProduct] = useState<Product | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const priceRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const qtyRefs = useRef<Array<HTMLInputElement | null>>([]);
   const barcodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { searchRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    function handleWorkspaceKey(event: KeyboardEvent) {
+      if (event.altKey && event.key.toLowerCase() === 'b') {
+        event.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
+      const target = event.target as HTMLElement;
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+      if (isTyping) return;
+      const lastIndex = Math.max(0, bill.items.length - 1);
+      if (event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        priceRefs.current[lastIndex]?.focus();
+      }
+      if (event.key.toLowerCase() === 'q') {
+        event.preventDefault();
+        qtyRefs.current[lastIndex]?.focus();
+      }
+    }
+    window.addEventListener('keydown', handleWorkspaceKey);
+    return () => window.removeEventListener('keydown', handleWorkspaceKey);
+  }, [bill.items.length]);
 
   const submitBarcode = useCallback((value: string) => {
     const barcode = normalizeBarcode(value);
@@ -185,11 +213,20 @@ export default function BillingWorkspace({
               </div>
               <div className="border-r border-gray-100 px-3 py-3 font-mono text-xs text-gray-700">{item.product.barcode || '-'}</div>
               <div className="border-r border-gray-100 px-3 py-3 text-right">₹ {item.product.mrp || item.product.price}</div>
-              <div className="border-r border-gray-100 px-3 py-3 text-right">₹ {item.product.price}</div>
+              <div className="border-r border-gray-100 px-3 py-2 text-right">
+                <input
+                  ref={el => { priceRefs.current[index] = el; }}
+                  type="number"
+                  min={0}
+                  value={item.product.price}
+                  onChange={e => onUpdatePrice(item.product.id, parseFloat(e.target.value) || 0)}
+                  className="ml-auto w-24 rounded border border-transparent bg-transparent px-2 py-1 text-right outline-none focus:border-blue-300 focus:bg-white"
+                />
+              </div>
               <div className="border-r border-gray-100 px-3 py-2 text-right">
                 <div className="ml-auto flex w-28 items-center overflow-hidden rounded border border-gray-200 bg-gray-50">
                   <button onClick={() => onUpdateQuantity(item.product.id, item.quantity - 1)} className="px-2 py-1.5 hover:bg-gray-100"><ChevronDown size={13} /></button>
-                  <input type="number" min={1} value={item.quantity} onChange={e => onUpdateQuantity(item.product.id, Math.max(1, parseFloat(e.target.value) || 1))} className="w-12 bg-white py-1.5 text-center text-sm outline-none" />
+                  <input ref={el => { qtyRefs.current[index] = el; }} type="number" min={1} value={item.quantity} onChange={e => onUpdateQuantity(item.product.id, Math.max(1, parseFloat(e.target.value) || 1))} className="w-12 bg-white py-1.5 text-center text-sm outline-none" />
                   <button onClick={() => onUpdateQuantity(item.product.id, item.quantity + 1)} className="px-2 py-1.5 hover:bg-gray-100"><ChevronUp size={13} /></button>
                 </div>
               </div>
