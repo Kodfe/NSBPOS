@@ -212,7 +212,14 @@ function ProductRow({ product, index, onClick }: { product: Product; index: numb
     >
       <div className="border-r border-gray-100 px-3 py-3 text-gray-600">{index}</div>
       <div className="min-w-0 border-r border-gray-100 px-3 py-3">
-        <p className="truncate font-medium text-gray-900">{product.name}</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="truncate font-medium text-gray-900">{product.name}</p>
+          {product.isLoose && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+              Loose
+            </span>
+          )}
+        </div>
         <p className="mt-0.5 text-[11px] text-gray-500">
           {product.category || 'Uncategorized'}{product.brand ? ` - ${product.brand}` : ''}
         </p>

@@ -338,7 +338,14 @@ export default function ProductsPage() {
                     <div className="flex items-center gap-2">
                       {p.isLoose && <Scale size={12} className="text-amber-500 flex-shrink-0" />}
                       <div>
-                        <p className="font-medium text-gray-900">{p.name}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-gray-900">{p.name}</p>
+                          {p.isLoose && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                              Loose
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-gray-400">{p.barcode || 'No barcode'} · {p.brand}</p>
                       </div>
                     </div>
