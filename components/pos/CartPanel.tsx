@@ -35,7 +35,7 @@ export default function CartPanel({
   onRemoveItem, onClearBill, onHoldBill, onOpenPayment, onOpenCustomer,
 }: Props) {
   const hasItems = bill.items.length > 0;
-  const itemCount = bill.items.reduce((s, i) => s + (i.product.isLoose ? 1 : i.quantity), 0);
+  const typeCount = bill.items.length;
 
   // Modified-bill delta calculations
   const isModified = originalBillTotal !== undefined;
@@ -125,7 +125,7 @@ export default function CartPanel({
       {hasItems && (
         <div className="border-t border-gray-200 bg-gray-50 px-4 py-3 space-y-1.5">
           <div className="flex justify-between text-sm text-gray-600">
-            <span>Subtotal ({itemCount} items)</span>
+            <span>Subtotal ({typeCount} types)</span>
             <span>{formatCurrency(bill.subtotal)}</span>
           </div>
           {bill.totalDiscount > 0 && (

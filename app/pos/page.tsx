@@ -618,6 +618,7 @@ export default function POSPage() {
               onBarcodeSearch={handleBarcodeSearch}
               onCreateProduct={openProductModal}
               onUpdateQuantity={pos.updateQuantity}
+              onUpdateWeight={pos.updateWeight}
               onUpdatePrice={pos.updateItemPrice}
               onUpdateDiscount={pos.updateDiscount}
               onRemoveItem={pos.removeItem}
