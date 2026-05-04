@@ -18,7 +18,7 @@ interface Props {
   onStoreCreditChange: (amount: number) => void;
   onUpdateQuantity: (id: string, qty: number) => void;
   onUpdateWeight: (id: string, weightKg: number) => void;
-  onUpdateDiscount: (id: string, discount: number) => void;
+  onUpdateDiscount: (id: string, discount: number, discountAmount?: number) => void;
   onRemoveItem: (id: string) => void;
   onClearBill: () => void;
   onHoldBill: () => void;
@@ -105,7 +105,7 @@ export default function CartPanel({
                   key={item.product.id}
                   item={item}
                   onUpdateQuantity={qty => onUpdateQuantity(item.product.id, qty)}
-                  onUpdateDiscount={d => onUpdateDiscount(item.product.id, d)}
+                  onUpdateDiscount={(d, amount) => onUpdateDiscount(item.product.id, d, amount)}
                   onRemove={() => onRemoveItem(item.product.id)}
                 />
               )
@@ -295,33 +295,41 @@ function CartItemRow({
 }: {
   item: CartItem;
   onUpdateQuantity: (qty: number) => void;
-  onUpdateDiscount: (d: number) => void;
+  onUpdateDiscount: (d: number, amount?: number) => void;
   onRemove: () => void;
 }) {
-  const [showDiscount, setShowDiscount] = useState(false);
+  const [showDiscount, setShowDiscount] = useState((item.discount > 0) || ((item.discountAmount ?? 0) > 0));
+  const totalLineDiscount = Math.max(0, (item.product.price * item.quantity) - item.total);
 
   return (
-    <div className="px-3 py-2.5">
+    <div className="px-3 py-3">
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-800 truncate">{item.product.name}</p>
-          <p className="text-xs text-gray-400">
+          <p className="text-sm font-semibold text-gray-800 truncate">{item.product.name}</p>
+          <p className="text-xs text-gray-500">
             &#8377;{item.product.price} × {item.quantity} = <span className="font-semibold text-gray-700">&#8377;{item.total.toFixed(2)}</span>
           </p>
-          {item.discount > 0 && (
+          {totalLineDiscount > 0 && (
             <p className="text-xs text-green-600">
-              Disc: {item.discount}% (-&#8377;{(item.product.price * item.quantity * item.discount / 100).toFixed(2)})
+              Discount: -&#8377;{totalLineDiscount.toFixed(2)}
             </p>
           )}
         </div>
 
         {/* Qty control */}
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg">
-          <button onClick={() => onUpdateQuantity(item.quantity - 1)} className="px-2 py-1 hover:text-red-500 transition-colors">
+        <div className="flex items-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+          <button onClick={() => onUpdateQuantity(item.quantity - 1)} className="px-2 py-1.5 hover:bg-red-50 hover:text-red-500 transition-colors">
             <ChevronDown size={14} />
           </button>
-          <span className="text-sm font-bold w-6 text-center">{item.quantity}</span>
-          <button onClick={() => onUpdateQuantity(item.quantity + 1)} className="px-2 py-1 hover:text-saffron-500 transition-colors">
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={item.quantity}
+            onChange={e => onUpdateQuantity(Math.max(1, parseFloat(e.target.value) || 1))}
+            className="w-10 bg-white px-1 py-1.5 text-center text-sm font-bold outline-none"
+          />
+          <button onClick={() => onUpdateQuantity(item.quantity + 1)} className="px-2 py-1.5 hover:bg-saffron-50 hover:text-saffron-500 transition-colors">
             <ChevronUp size={14} />
           </button>
         </div>
@@ -340,17 +348,30 @@ function CartItemRow({
         {showDiscount ? 'Hide' : 'Add'} discount
       </button>
       {showDiscount && (
-        <div className="mt-1 flex items-center gap-2">
-          <input
-            type="number"
-            min={0}
-            max={100}
-            value={item.discount}
-            onChange={e => onUpdateDiscount(Number(e.target.value))}
-            className="w-20 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-saffron-400"
-            placeholder="0"
-          />
-          <span className="text-xs text-gray-500">%</span>
+        <div className="mt-1.5 grid max-w-[210px] grid-cols-2 gap-2">
+          <label className="flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 focus-within:border-saffron-400">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={item.discount}
+              onChange={e => onUpdateDiscount(Number(e.target.value), item.discountAmount ?? 0)}
+              className="w-full text-xs outline-none"
+              placeholder="0"
+            />
+            <span className="text-xs text-gray-500">%</span>
+          </label>
+          <label className="flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 focus-within:border-saffron-400">
+            <span className="text-xs text-gray-500">&#8377;</span>
+            <input
+              type="number"
+              min={0}
+              value={item.discountAmount ?? 0}
+              onChange={e => onUpdateDiscount(item.discount, Number(e.target.value))}
+              className="w-full text-xs outline-none"
+              placeholder="0"
+            />
+          </label>
         </div>
       )}
     </div>

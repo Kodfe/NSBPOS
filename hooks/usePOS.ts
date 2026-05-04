@@ -66,7 +66,7 @@ export function usePOS() {
       if (existing >= 0) {
         const items = [...bill.items];
         const item = items[existing];
-        items[existing] = calcCartItem(product, item.quantity + 1, item.discount);
+        items[existing] = calcCartItem(product, item.quantity + 1, item.discount, item.discountAmount ?? 0);
         return { ...bill, items };
       }
       return { ...bill, items: [...bill.items, calcCartItem(product, 1, 0)] };
@@ -99,7 +99,7 @@ export function usePOS() {
       ...bill,
       items: bill.items.map(i =>
         i.product.id === productId
-          ? { ...calcCartItem(i.product, weightKg, i.discount), weightKg }
+          ? { ...calcCartItem(i.product, weightKg, i.discount, i.discountAmount ?? 0), weightKg }
           : i
       ),
     }));
@@ -110,17 +110,22 @@ export function usePOS() {
     updateActiveBill(bill => ({
       ...bill,
       items: bill.items.map(i =>
-        i.product.id === productId ? calcCartItem(i.product, quantity, i.discount) : i
+        i.product.id === productId ? calcCartItem(i.product, quantity, i.discount, i.discountAmount ?? 0) : i
       ),
     }));
   }, [updateActiveBill, removeItem]);
 
-  const updateDiscount = useCallback((productId: string, discount: number) => {
+  const updateDiscount = useCallback((productId: string, discount: number, discountAmount?: number) => {
     updateActiveBill(bill => ({
       ...bill,
       items: bill.items.map(i =>
         i.product.id === productId
-          ? calcCartItem(i.product, i.quantity, Math.min(100, Math.max(0, discount)))
+          ? calcCartItem(
+              i.product,
+              i.quantity,
+              Math.min(100, Math.max(0, discount)),
+              discountAmount ?? i.discountAmount ?? 0,
+            )
           : i
       ),
     }));

@@ -24,6 +24,7 @@ export interface CartItem {
   quantity: number;   // for loose items this holds the weight in kg (e.g. 1.25)
   weightKg?: number;  // explicit weight copy for loose items display
   discount: number;   // percentage
+  discountAmount?: number; // flat line discount amount
   priceOverride?: number;
   total: number;
   gstAmount: number;

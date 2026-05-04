@@ -8,24 +8,27 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export function calcCartItem(product: Product, quantity: number, discount = 0): CartItem {
-  const basePrice = product.price;
-  const discountedPrice = basePrice * (1 - discount / 100);
+export function calcCartItem(product: Product, quantity: number, discount = 0, discountAmount = 0): CartItem {
+  const qty = Math.max(0, quantity);
+  const baseTotal = product.price * qty;
+  const percentDiscount = baseTotal * (Math.min(100, Math.max(0, discount)) / 100);
+  const flatDiscount = Math.min(Math.max(0, discountAmount), Math.max(0, baseTotal - percentDiscount));
+  const discountedTotal = Math.max(0, baseTotal - percentDiscount - flatDiscount);
   const gstRate = product.gstRate / 100;
-  const priceExGst = discountedPrice / (1 + gstRate);
-  const gstAmount = discountedPrice - priceExGst;
+  const priceExGst = discountedTotal / (1 + gstRate);
+  const gstAmount = discountedTotal - priceExGst;
   const cgst = gstAmount / 2;
   const sgst = gstAmount / 2;
-  const total = discountedPrice * quantity;
 
   return {
     product,
-    quantity,
-    discount,
-    total,
-    gstAmount: gstAmount * quantity,
-    cgst: cgst * quantity,
-    sgst: sgst * quantity,
+    quantity: qty,
+    discount: Math.min(100, Math.max(0, discount)),
+    discountAmount: flatDiscount,
+    total: discountedTotal,
+    gstAmount,
+    cgst,
+    sgst,
   };
 }
 
@@ -34,9 +37,9 @@ export function calcBillTotals(
   adjustment = 0,          // negative = deducts (discount), positive = adds (due)
   storeCreditApplied = 0,  // always deducts
 ) {
-  const subtotal = items.reduce((s, i) => s + i.product.price * (i.weightKg ?? i.quantity) * (1 - i.discount / 100), 0);
+  const subtotal = items.reduce((s, i) => s + i.total, 0);
   const totalGst = items.reduce((s, i) => s + i.gstAmount, 0);
-  const totalDiscount = items.reduce((s, i) => s + i.product.price * (i.weightKg ?? i.quantity) * (i.discount / 100), 0);
+  const totalDiscount = items.reduce((s, i) => s + Math.max(0, (i.product.price * (i.weightKg ?? i.quantity)) - i.total), 0);
   const raw = subtotal + adjustment - storeCreditApplied;
   const roundOff = Math.round(raw) - raw;
   const total = Math.max(0, Math.round(raw));

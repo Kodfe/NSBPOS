@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { Keyboard, Store, Clock, Wifi, WifiOff, Receipt, Monitor, LockKeyhole, LogOut } from 'lucide-react';
+import { Check, Keyboard, Store, Clock, Wifi, WifiOff, Receipt, Monitor, LockKeyhole, LogOut, Package, X } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
 
@@ -22,7 +22,7 @@ import { db } from '@/lib/firebase';
 import { addStoreCredit, deductStoreCredit, updateCustomerStats } from '@/lib/customers-firestore';
 import { cancelBill, returnStock, markBillAsAdjusted } from '@/lib/firestore';
 import { getCategories } from '@/lib/categories-firestore';
-import { getMachines, startMachineSession, stopMachineSession, updateMachineSessionHeartbeat, verifyOperatorPin } from '@/lib/admin-firestore';
+import { adminAddProduct, getMachines, startMachineSession, stopMachineSession, updateMachineSessionHeartbeat, verifyOperatorPin } from '@/lib/admin-firestore';
 import { normalizeBarcode } from '@/lib/utils';
 import { Bill, PaymentDetails, Product, Category, StoreSettings, POSMachine, Operator } from '@/types';
 
@@ -30,12 +30,33 @@ const POS_SESSION_KEY = 'nsb_pos_machine_session';
 const OPERATOR_INACTIVITY_LOGOUT_MS = 10 * 60 * 1000;
 const OPERATOR_HEARTBEAT_MS = 30 * 1000;
 const OPERATOR_ACTIVITY_EVENTS = ['keydown', 'mousedown', 'mousemove', 'touchstart', 'scroll', 'wheel', 'click'];
+const POS_UNITS = ['piece', 'kg', 'gm', 'ltr', 'ml', 'pack', 'dozen', 'box', 'bottle'];
+const POS_GST_RATES = [0, 5, 12, 18, 28];
 
 type PosSession = {
   machine: POSMachine;
   operator: Operator;
   startedAt: string;
 };
+
+function emptyPosProduct(categories: Category[], seed?: Partial<Product>): Omit<Product, 'id'> {
+  return {
+    name: seed?.name ?? '',
+    barcode: seed?.barcode ?? '',
+    price: seed?.price ?? 0,
+    mrp: seed?.mrp ?? 0,
+    purchasePrice: seed?.purchasePrice ?? 0,
+    gstRate: seed?.gstRate ?? 0,
+    hsnCode: seed?.hsnCode ?? '',
+    category: seed?.category ?? categories[0]?.name ?? 'Essentials',
+    unit: seed?.unit ?? 'piece',
+    stock: seed?.stock ?? 0,
+    minStock: seed?.minStock ?? 5,
+    brand: seed?.brand ?? '',
+    isActive: true,
+    isLoose: seed?.isLoose ?? false,
+  };
+}
 
 export default function POSPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -56,6 +77,9 @@ export default function POSPage() {
   const [posSession, setPosSession] = useState<PosSession | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [loginLoading, setLoginLoading] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [productForm, setProductForm] = useState<Omit<Product, 'id'>>(emptyPosProduct([]));
+  const [addingProduct, setAddingProduct] = useState(false);
 
   const pos = usePOS();
   const modifiedCartProductIds = new Set(pos.activeBill?.originalBillId ? pos.activeBill.items.map(item => item.product.id) : []);
@@ -171,6 +195,36 @@ export default function POSPage() {
       toast.error('Barcode lookup failed');
     }
   }, [products, pos]);
+
+  const openProductModal = useCallback((seed?: Partial<Product>) => {
+    setProductForm(emptyPosProduct(categories, seed));
+    setShowProductModal(true);
+  }, [categories]);
+
+  const handleCreateProduct = useCallback(async () => {
+    if (!productForm.name.trim()) { toast.error('Product name is required'); return; }
+    if (productForm.price <= 0) { toast.error('Selling price is required'); return; }
+    setAddingProduct(true);
+    try {
+      const payload = {
+        ...productForm,
+        barcode: normalizeBarcode(productForm.barcode),
+        mrp: productForm.mrp || productForm.price,
+        purchasePrice: productForm.purchasePrice || 0,
+      };
+      const id = await adminAddProduct(payload);
+      const product: Product = { id, ...payload };
+      setProducts(prev => [...prev, product].sort((a, b) => a.name.localeCompare(b.name)));
+      if (product.isLoose) setBarcodeLooseProduct(product);
+      else pos.addItem(product);
+      setShowProductModal(false);
+      toast.success('Product added to POS');
+    } catch {
+      toast.error('Product save failed');
+    } finally {
+      setAddingProduct(false);
+    }
+  }, [pos, productForm]);
 
   const handlePaymentConfirm = useCallback(async (payment: PaymentDetails) => {
     try {
@@ -510,6 +564,7 @@ export default function POSPage() {
               toast.success(`Added: ${product.name} — ${weight} kg`, { duration: 1500 });
             }}
             onBarcodeSearch={handleBarcodeSearch}
+            onCreateProduct={openProductModal}
           />
         </div>
 
@@ -610,6 +665,72 @@ export default function POSPage() {
           onClose={() => setBarcodeLooseProduct(null)}
         />
       )}
+
+      {showProductModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={e => e.target === e.currentTarget && setShowProductModal(false)}>
+          <div className="mx-4 flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <div className="flex items-center gap-2">
+                <Package size={18} className="text-saffron-500" />
+                <h2 className="font-bold text-gray-900">Add Product</h2>
+              </div>
+              <button onClick={() => setShowProductModal(false)}><X size={18} className="text-gray-400" /></button>
+            </div>
+            <div className="grid flex-1 grid-cols-2 gap-4 overflow-y-auto p-6">
+              <div className="col-span-2">
+                <label className="label">Product Name *</label>
+                <input value={productForm.name} onChange={e => setProductForm(f => ({ ...f, name: e.target.value }))} className="input" autoFocus />
+              </div>
+              <div>
+                <label className="label">Barcode</label>
+                <input value={productForm.barcode || ''} onChange={e => setProductForm(f => ({ ...f, barcode: normalizeBarcode(e.target.value) }))} className="input" placeholder="Scan or type" />
+              </div>
+              <div>
+                <label className="label">Brand</label>
+                <input value={productForm.brand || ''} onChange={e => setProductForm(f => ({ ...f, brand: e.target.value }))} className="input" />
+              </div>
+              <div>
+                <label className="label">Selling Price *</label>
+                <input type="number" value={productForm.price} onChange={e => setProductForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} className="input" min="0" step="0.01" />
+              </div>
+              <div>
+                <label className="label">MRP</label>
+                <input type="number" value={productForm.mrp} onChange={e => setProductForm(f => ({ ...f, mrp: parseFloat(e.target.value) || 0 }))} className="input" min="0" step="0.01" />
+              </div>
+              <div>
+                <label className="label">Opening Stock</label>
+                <input type="number" value={productForm.stock} onChange={e => setProductForm(f => ({ ...f, stock: parseFloat(e.target.value) || 0 }))} className="input" step="0.01" />
+              </div>
+              <div>
+                <label className="label">GST Rate</label>
+                <select value={productForm.gstRate} onChange={e => setProductForm(f => ({ ...f, gstRate: parseInt(e.target.value) }))} className="input">
+                  {POS_GST_RATES.map(rate => <option key={rate} value={rate}>{rate}%</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Category</label>
+                <select value={productForm.category} onChange={e => setProductForm(f => ({ ...f, category: e.target.value }))} className="input">
+                  {categories.map(category => <option key={category.id} value={category.name}>{category.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Unit</label>
+                <select value={productForm.unit} onChange={e => setProductForm(f => ({ ...f, unit: e.target.value, isLoose: e.target.value === 'kg' }))} className="input">
+                  {POS_UNITS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 border-t px-6 pb-6 pt-4">
+              <button onClick={() => setShowProductModal(false)} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateProduct} disabled={addingProduct} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-saffron-400 py-2.5 text-sm font-semibold text-white hover:bg-saffron-500 disabled:bg-gray-200">
+                {addingProduct ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Check size={16} />}
+                Add Product
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <style>{`.label{display:block;font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}.input{width:100%;padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:13px;outline:none;transition:border-color .15s}.input:focus{border-color:#ff9933}`}</style>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, ScanBarcode, Scale } from 'lucide-react';
+import { Plus, Search, ScanBarcode, Scale } from 'lucide-react';
 import { Product, Category } from '@/types';
 import { normalizeBarcode } from '@/lib/utils';
 import WeightModal from './WeightModal';
@@ -13,9 +13,10 @@ interface Props {
   onAddItem: (product: Product) => void;
   onAddLooseItem: (product: Product, weightKg: number) => void;
   onBarcodeSearch: (barcode: string) => void;
+  onCreateProduct?: (seed?: Partial<Product>) => void;
 }
 
-export default function ProductSearch({ products, categories, modeLabel, hiddenProductCount = 0, onAddItem, onAddLooseItem, onBarcodeSearch }: Props) {
+export default function ProductSearch({ products, categories, modeLabel, hiddenProductCount = 0, onAddItem, onAddLooseItem, onBarcodeSearch, onCreateProduct }: Props) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [weightProduct, setWeightProduct] = useState<Product | null>(null);
@@ -91,7 +92,8 @@ export default function ProductSearch({ products, categories, modeLabel, hiddenP
             )}
           </div>
         )}
-        <div className="relative">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input
             ref={searchRef}
@@ -107,6 +109,16 @@ export default function ProductSearch({ products, categories, modeLabel, hiddenP
             className="w-full pl-9 pr-10 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-saffron-400 focus:ring-2 focus:ring-saffron-100"
           />
           <ScanBarcode className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+          </div>
+          {onCreateProduct && (
+            <button
+              onClick={() => onCreateProduct(search ? { name: search } : undefined)}
+              className="flex h-10 items-center gap-1.5 rounded-xl bg-saffron-400 px-3 text-xs font-bold text-white hover:bg-saffron-500"
+              title="Add product"
+            >
+              <Plus size={15} /> Add
+            </button>
+          )}
         </div>
       </div>
 
@@ -133,6 +145,14 @@ export default function ProductSearch({ products, categories, modeLabel, hiddenP
           <div className="flex flex-col items-center justify-center h-48 text-gray-400">
             <ScanBarcode size={40} className="mb-2 opacity-30" />
             <p className="text-sm">No products found</p>
+            {onCreateProduct && (
+              <button
+                onClick={() => onCreateProduct(search ? { name: search } : undefined)}
+                className="mt-3 rounded-lg border border-dashed border-saffron-300 px-4 py-2 text-sm font-semibold text-saffron-600 hover:bg-saffron-50"
+              >
+                + Add product
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">

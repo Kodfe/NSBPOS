@@ -122,10 +122,12 @@ export default function ReceiptModal({ bill, settings = DEFAULT_SETTINGS, onClos
                       <span style={{ width: `${colAmt}ch`, flexShrink: 0, textAlign: 'right' }}>{amtDisplay}</span>
                     </div>
                     {/* sub-line for discount / GST */}
-                    {(item.discount > 0 || (settings.gstEnabled && item.product.gstRate > 0)) && (
+                    {((item.discount > 0 || (item.discountAmount ?? 0) > 0) || (settings.gstEnabled && item.product.gstRate > 0)) && (
                       <div className="text-gray-400 pl-4 text-[9px]">
                         {item.discount > 0 ? `Disc: ${item.discount}%` : ''}
-                        {item.discount > 0 && settings.gstEnabled && item.product.gstRate > 0 ? ' | ' : ''}
+                        {(item.discount > 0 && (item.discountAmount ?? 0) > 0) ? ' + ' : ''}
+                        {(item.discountAmount ?? 0) > 0 ? `Rs ${item.discountAmount!.toFixed(2)}` : ''}
+                        {(item.discount > 0 || (item.discountAmount ?? 0) > 0) && settings.gstEnabled && item.product.gstRate > 0 ? ' | ' : ''}
                         {settings.gstEnabled && item.product.gstRate > 0 ? `GST@${item.product.gstRate}%` : ''}
                       </div>
                     )}
