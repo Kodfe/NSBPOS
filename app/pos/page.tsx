@@ -675,6 +675,7 @@ export default function POSPage() {
               onOpenPayment={() => setShowPayment(true)}
               onOpenCustomer={() => setShowCustomer(true)}
               onOpenBillSearch={() => setShowBillSearch(true)}
+              onCreateProduct={() => openProductModal()}
             />
           )}
         </div>

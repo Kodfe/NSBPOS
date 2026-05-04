@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { AlertTriangle, Receipt, Trash2, User, Pause, ShoppingCart, ChevronUp, ChevronDown, Scale, Pencil, FilePen } from 'lucide-react';
+import { AlertTriangle, PackagePlus, Receipt, Trash2, User, Pause, ShoppingCart, ChevronUp, ChevronDown, Scale, Pencil, FilePen } from 'lucide-react';
 import { Bill, CartItem, Customer, StoreSettings } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import WeightModal from './WeightModal';
@@ -26,6 +26,7 @@ interface Props {
   onOpenPayment: () => void;
   onOpenCustomer: () => void;
   onOpenBillSearch?: () => void;
+  onCreateProduct?: () => void;
 }
 
 export default function CartPanel({
@@ -33,7 +34,7 @@ export default function CartPanel({
   adjustment, adjustmentNote, storeCreditApplied, originalBillTotal, showCartItems = true,
   onAdjustmentChange, onStoreCreditChange,
   onUpdateQuantity, onUpdateWeight, onUpdateDiscount,
-  onRemoveItem, onClearBill, onHoldBill, onOpenPayment, onOpenCustomer, onOpenBillSearch,
+  onRemoveItem, onClearBill, onHoldBill, onOpenPayment, onOpenCustomer, onOpenBillSearch, onCreateProduct,
 }: Props) {
   const hasItems = bill.items.length > 0;
   const typeCount = bill.items.length;
@@ -163,6 +164,22 @@ export default function CartPanel({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-gray-900">Bill Search Manager</p>
                   <p className="text-xs text-gray-500">Find, modify, exchange, or return bills</p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              onClick={onCreateProduct}
+              className="w-full rounded-lg border border-gray-200 bg-white p-3 text-left transition-colors hover:border-green-200 hover:bg-green-50/40 disabled:opacity-50"
+              disabled={!onCreateProduct}
+            >
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-50 text-green-600">
+                  <PackagePlus size={17} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-gray-900">Add New Product</p>
+                  <p className="text-xs text-gray-500">Create product and add it to billing</p>
                 </div>
               </div>
             </button>
