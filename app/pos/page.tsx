@@ -5,7 +5,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
 
 import BillTabs from '@/components/pos/BillTabs';
-import ProductSearch from '@/components/pos/ProductSearch';
+import BillingWorkspace from '@/components/pos/BillingWorkspace';
 import CartPanel from '@/components/pos/CartPanel';
 import PaymentModal from '@/components/pos/PaymentModal';
 import CustomerModal from '@/components/pos/CustomerModal';
@@ -553,19 +553,26 @@ export default function POSPage() {
       <div className="flex flex-1 overflow-hidden gap-0">
         {/* Left: Product search */}
         <div className="flex-1 flex flex-col overflow-hidden border-r border-gray-200">
-          <ProductSearch
-            products={productSearchProducts}
-            categories={categories}
-            modeLabel={pos.activeBill?.originalBillId ? 'Modify / Exchange Mode' : undefined}
-            hiddenProductCount={modifiedCartProductIds.size}
-            onAddItem={item => { pos.addItem(item); toast.success(`Added: ${item.name}`, { duration: 1000 }); }}
-            onAddLooseItem={(product, weight) => {
-              pos.addLooseItem(product, weight);
-              toast.success(`Added: ${product.name} — ${weight} kg`, { duration: 1500 });
-            }}
-            onBarcodeSearch={handleBarcodeSearch}
-            onCreateProduct={openProductModal}
-          />
+          {pos.activeBill && (
+            <BillingWorkspace
+              bill={pos.activeBill}
+              products={productSearchProducts}
+              categories={categories}
+              modeLabel={pos.activeBill?.originalBillId ? 'Modify / Exchange Mode' : undefined}
+              hiddenProductCount={modifiedCartProductIds.size}
+              onAddItem={item => { pos.addItem(item); toast.success(`Added: ${item.name}`, { duration: 1000 }); }}
+              onAddLooseItem={(product, weight) => {
+                pos.addLooseItem(product, weight);
+                toast.success(`Added: ${product.name} — ${weight} kg`, { duration: 1500 });
+              }}
+              onBarcodeSearch={handleBarcodeSearch}
+              onCreateProduct={openProductModal}
+              onUpdateQuantity={pos.updateQuantity}
+              onUpdateDiscount={pos.updateDiscount}
+              onRemoveItem={pos.removeItem}
+              onClearBill={pos.clearBill}
+            />
+          )}
         </div>
 
         {/* Right: Cart */}
@@ -579,6 +586,7 @@ export default function POSPage() {
               adjustmentNote={pos.activeBill.adjustmentNote ?? ''}
               storeCreditApplied={pos.activeBill.storeCreditApplied ?? 0}
               originalBillTotal={pos.activeBill.originalBillTotal}
+              showCartItems={false}
               onAdjustmentChange={pos.setAdjustment}
               onStoreCreditChange={pos.setStoreCreditApplied}
               onUpdateQuantity={pos.updateQuantity}

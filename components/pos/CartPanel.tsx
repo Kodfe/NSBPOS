@@ -14,6 +14,7 @@ interface Props {
   adjustmentNote: string;
   storeCreditApplied: number;
   originalBillTotal?: number;    // set when this is an edit of a paid bill
+  showCartItems?: boolean;
   onAdjustmentChange: (amount: number, note: string) => void;
   onStoreCreditChange: (amount: number) => void;
   onUpdateQuantity: (id: string, qty: number) => void;
@@ -28,7 +29,7 @@ interface Props {
 
 export default function CartPanel({
   bill, customer, settings,
-  adjustment, adjustmentNote, storeCreditApplied, originalBillTotal,
+  adjustment, adjustmentNote, storeCreditApplied, originalBillTotal, showCartItems = true,
   onAdjustmentChange, onStoreCreditChange,
   onUpdateQuantity, onUpdateWeight, onUpdateDiscount,
   onRemoveItem, onClearBill, onHoldBill, onOpenPayment, onOpenCustomer,
@@ -55,6 +56,7 @@ export default function CartPanel({
       )}
 
       {/* Customer bar */}
+      {showCartItems && (
       <button
         onClick={onOpenCustomer}
         className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 hover:bg-gray-50 transition-colors"
@@ -81,8 +83,10 @@ export default function CartPanel({
         </div>
         <span className="text-xs text-saffron-500">Edit</span>
       </button>
+      )}
 
       {/* Cart items */}
+      {showCartItems ? (
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {!hasItems ? (
           <div className="flex flex-col items-center justify-center h-40 text-gray-300">
@@ -113,6 +117,9 @@ export default function CartPanel({
           </div>
         )}
       </div>
+      ) : (
+        <div className="flex-1" />
+      )}
 
       {/* Totals */}
       {hasItems && (
