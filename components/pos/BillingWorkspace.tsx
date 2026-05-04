@@ -88,7 +88,7 @@ export default function BillingWorkspace({
     if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
     const barcode = normalizeBarcode(value);
     if (/^\d{8,}$/.test(barcode)) {
-      barcodeTimerRef.current = setTimeout(() => submitBarcode(barcode), 200);
+      barcodeTimerRef.current = setTimeout(() => submitBarcode(barcode), 50);
     }
   }
 

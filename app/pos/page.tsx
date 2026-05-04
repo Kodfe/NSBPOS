@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Check, Keyboard, Store, Clock, Wifi, WifiOff, Receipt, Monitor, LockKeyhole, LogOut, Package, X } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -83,6 +83,14 @@ export default function POSPage() {
   const [receiptAutoPrint, setReceiptAutoPrint] = useState(false);
 
   const pos = usePOS();
+  const productsByBarcode = useMemo(() => {
+    const map = new Map<string, Product>();
+    for (const product of products) {
+      const barcode = normalizeBarcode(product.barcode);
+      if (barcode) map.set(barcode, product);
+    }
+    return map;
+  }, [products]);
   const modifiedCartProductIds = new Set(pos.activeBill?.originalBillId ? pos.activeBill.items.map(item => item.product.id) : []);
   const productSearchProducts = pos.activeBill?.originalBillId
     ? products.filter(product => !modifiedCartProductIds.has(product.id))
@@ -149,7 +157,7 @@ export default function POSPage() {
 
   const handleBarcodeSearch = useCallback(async (barcode: string) => {
     const normalizedBarcode = normalizeBarcode(barcode);
-    const local = products.find(p => normalizeBarcode(p.barcode) === normalizedBarcode);
+    const local = productsByBarcode.get(normalizedBarcode);
     if (local) {
       if (local.isLoose) { setBarcodeLooseProduct(local); return; }
       pos.addItem(local);
@@ -168,7 +176,7 @@ export default function POSPage() {
     } catch {
       toast.error('Barcode lookup failed');
     }
-  }, [products, pos]);
+  }, [productsByBarcode, pos]);
 
   const openProductModal = useCallback((seed?: Partial<Product>) => {
     setProductForm(emptyPosProduct(categories, seed));

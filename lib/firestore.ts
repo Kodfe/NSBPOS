@@ -5,6 +5,8 @@ import {
   getDoc,
   addDoc,
   updateDoc,
+  writeBatch,
+  increment,
   query,
   where,
   orderBy,
@@ -14,7 +16,7 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Product, Bill, Customer, SaleReturn } from '@/types';
+import { Product, Bill, CartItem, Customer, SaleReturn } from '@/types';
 import { normalizeBarcode, stripUndefined } from './utils';
 import { loadSettings } from './settings';
 import { sendLowStockAlert } from './whatsapp-alerts';
@@ -101,6 +103,38 @@ export async function updateStock(id: string, quantitySold: number): Promise<voi
       await sendLowStockAlert(product, newStock, settings);
     }
   }
+}
+
+function sendLowStockAlertInBackground(product: Product, newStock: number) {
+  void loadSettings()
+    .then(settings => sendLowStockAlert(product, newStock, settings))
+    .catch(() => undefined);
+}
+
+export async function updateStocksAfterSale(items: CartItem[]): Promise<void> {
+  if (items.length === 0) return;
+  const batch = writeBatch(db);
+  const lowStockAlerts: Array<{ product: Product; newStock: number }> = [];
+
+  for (const item of items) {
+    const quantitySold = item.weightKg ?? item.quantity;
+    const product = item.product;
+    const currentStock = Number(product.stock ?? 0);
+    const newStock = currentStock - quantitySold;
+    const minStock = product.minStock ?? 5;
+
+    batch.update(doc(db, 'products', product.id), {
+      stock: increment(-quantitySold),
+      updatedAt: serverTimestamp(),
+    });
+
+    if (currentStock > minStock && newStock <= minStock) {
+      lowStockAlerts.push({ product, newStock });
+    }
+  }
+
+  await batch.commit();
+  lowStockAlerts.forEach(({ product, newStock }) => sendLowStockAlertInBackground(product, newStock));
 }
 
 // ── Bills ─────────────────────────────────────────────────────────────────────
@@ -252,13 +286,16 @@ export async function generateReturnNumber(): Promise<string> {
 export async function generateBillNumber(): Promise<string> {
   const today = new Date();
   const prefix = `NSB${today.getFullYear().toString().slice(2)}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
-  const q = query(collection(db, 'bills'), orderBy('createdAt', 'desc'));
+  const q = query(
+    collection(db, 'bills'),
+    where('billNumber', '>=', prefix),
+    where('billNumber', '<=', `${prefix}\uf8ff`),
+    orderBy('billNumber', 'desc'),
+    limit(1),
+  );
   const snap = await getDocs(q);
-  const nextSuffix = snap.docs.reduce((max, docSnap) => {
-    const billNumber = String(docSnap.data().billNumber ?? '');
-    if (!billNumber.startsWith(prefix)) return max;
-    const suffix = Number.parseInt(billNumber.split('-').pop() ?? '', 10);
-    return Number.isFinite(suffix) ? Math.max(max, suffix) : max;
-  }, 0) + 1;
+  const latestBillNumber = snap.docs[0]?.data().billNumber;
+  const latestSuffix = Number.parseInt(String(latestBillNumber ?? '').split('-').pop() ?? '', 10);
+  const nextSuffix = (Number.isFinite(latestSuffix) ? latestSuffix : 0) + 1;
   return `${prefix}-${String(nextSuffix).padStart(4, '0')}`;
 }

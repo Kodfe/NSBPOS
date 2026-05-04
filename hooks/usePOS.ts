@@ -2,7 +2,7 @@
 import { useState, useCallback } from 'react';
 import { Bill, BillTab, Customer, PaymentDetails, Product } from '@/types';
 import { calcCartItem, calcBillTotals, shortId } from '@/lib/utils';
-import { saveBill, updateStock } from '@/lib/firestore';
+import { saveBill, updateStocksAfterSale } from '@/lib/firestore';
 
 type SaleSessionMeta = {
   machineId?: string;
@@ -238,9 +238,7 @@ export function usePOS() {
         paidAt: saleTime,
       };
       const id = await saveBill(finalBill);
-      for (const item of activeBill.items) {
-        await updateStock(item.product.id, item.weightKg ?? item.quantity);
-      }
+      await updateStocksAfterSale(activeBill.items);
       updateActiveBill(() => ({ ...finalBill, id }));
       return { ...finalBill, id };
     } finally {
