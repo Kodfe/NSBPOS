@@ -46,9 +46,12 @@ export default function BillingWorkspace({
   const [weightProduct, setWeightProduct] = useState<Product | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const resultRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const discountPctRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const discountAmountRefs = useRef<Array<HTMLInputElement | null>>([]);
   const priceRefs = useRef<Array<HTMLInputElement | null>>([]);
   const qtyRefs = useRef<Array<HTMLInputElement | null>>([]);
   const barcodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastBarcodeRef = useRef<{ value: string; at: number } | null>(null);
 
   useEffect(() => { searchRef.current?.focus(); }, []);
 
@@ -81,6 +84,12 @@ export default function BillingWorkspace({
     if (!barcode) return;
     if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
     barcodeTimerRef.current = null;
+    const now = Date.now();
+    if (lastBarcodeRef.current?.value === barcode && now - lastBarcodeRef.current.at < 900) {
+      setSearch('');
+      return;
+    }
+    lastBarcodeRef.current = { value: barcode, at: now };
     setSearch('');
     onBarcodeSearch(barcode);
   }, [onBarcodeSearch]);
@@ -91,7 +100,7 @@ export default function BillingWorkspace({
     if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
     const barcode = normalizeBarcode(value);
     if (/^\d{8,}$/.test(barcode)) {
-      barcodeTimerRef.current = setTimeout(() => submitBarcode(barcode), 50);
+      barcodeTimerRef.current = setTimeout(() => submitBarcode(barcode), 140);
     }
   }
 
@@ -108,6 +117,37 @@ export default function BillingWorkspace({
   function updateLineQty(product: Product, value: number) {
     if (product.isLoose) onUpdateWeight(product.id, Math.max(0.01, value));
     else onUpdateQuantity(product.id, Math.max(1, value));
+  }
+
+  function focusCell(row: number, col: number) {
+    const refs = [discountPctRefs, discountAmountRefs, priceRefs, qtyRefs];
+    const safeRow = Math.max(0, Math.min(bill.items.length - 1, row));
+    const safeCol = Math.max(0, Math.min(refs.length - 1, col));
+    refs[safeCol].current[safeRow]?.focus();
+    refs[safeCol].current[safeRow]?.select();
+  }
+
+  function handleCellKey(event: React.KeyboardEvent<HTMLInputElement>, row: number, col: number) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      focusCell(row + 1, col);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (row === 0) searchRef.current?.focus();
+      else focusCell(row - 1, col);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      focusCell(row, col + 1);
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      focusCell(row, col - 1);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      focusCell(Math.min(bill.items.length - 1, row + 1), col);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      searchRef.current?.focus();
+    }
   }
 
   function stockStatus(product: Product, quantity = 0): 'negative' | 'low' | null {
@@ -171,7 +211,9 @@ export default function BillingWorkspace({
               onKeyDown={e => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  if (filteredProducts[activeResultIndex]) addProduct(filteredProducts[activeResultIndex]);
+                  const barcode = normalizeBarcode(search);
+                  if (/^\d{8,}$/.test(barcode)) submitBarcode(barcode);
+                  else if (filteredProducts[activeResultIndex]) addProduct(filteredProducts[activeResultIndex]);
                   else submitBarcode(search);
                 } else if (e.key === 'ArrowDown') {
                   e.preventDefault();
@@ -179,6 +221,9 @@ export default function BillingWorkspace({
                 } else if (e.key === 'ArrowUp') {
                   e.preventDefault();
                   setActiveResultIndex(index => Math.max(0, index - 1));
+                } else if (e.key === 'ArrowRight' && bill.items.length > 0) {
+                  e.preventDefault();
+                  focusCell(bill.items.length - 1, 3);
                 }
               }}
               className="flex-1 border-0 px-4 py-2 text-sm outline-none"
@@ -266,11 +311,13 @@ export default function BillingWorkspace({
                     <StockTag status={itemStockStatus} />
                     <label className="flex h-7 items-center gap-1 rounded border border-gray-200 bg-white px-2 focus-within:border-saffron-400">
                       <input
+                        ref={el => { discountPctRefs.current[index] = el; }}
                         type="number"
                         min={0}
                         max={100}
                         value={item.discount}
                         onChange={e => onUpdateDiscount(item.product.id, Number(e.target.value), item.discountAmount ?? 0)}
+                        onKeyDown={e => handleCellKey(e, index, 0)}
                         className="w-10 outline-none"
                       />
                       <Percent size={11} className="text-gray-400" />
@@ -278,10 +325,12 @@ export default function BillingWorkspace({
                     <label className="flex h-7 items-center gap-1 rounded border border-gray-200 bg-white px-2 focus-within:border-saffron-400">
                       <span className="text-gray-400">&#8377;</span>
                       <input
+                        ref={el => { discountAmountRefs.current[index] = el; }}
                         type="number"
                         min={0}
                         value={item.discountAmount ?? 0}
                         onChange={e => onUpdateDiscount(item.product.id, item.discount, Number(e.target.value))}
+                        onKeyDown={e => handleCellKey(e, index, 1)}
                         className="w-14 outline-none"
                       />
                     </label>
@@ -297,6 +346,7 @@ export default function BillingWorkspace({
                     min={0}
                     value={item.product.price}
                     onChange={e => onUpdatePrice(item.product.id, parseFloat(e.target.value) || 0)}
+                    onKeyDown={e => handleCellKey(e, index, 2)}
                     className="ml-auto w-24 rounded border border-transparent bg-transparent px-2 py-1 text-right outline-none focus:border-blue-300 focus:bg-white"
                   />
                 </div>
@@ -310,6 +360,7 @@ export default function BillingWorkspace({
                       step={item.product.isLoose ? 0.01 : 1}
                       value={quantityValue}
                       onChange={e => updateLineQty(item.product, parseFloat(e.target.value) || (item.product.isLoose ? 0.01 : 1))}
+                      onKeyDown={e => handleCellKey(e, index, 3)}
                       className="w-12 bg-white py-1.5 text-center text-sm outline-none"
                     />
                     <button onClick={() => updateLineQty(item.product, quantityValue + qtyStep)} className="px-2 py-1.5 hover:bg-gray-100"><ChevronUp size={13} /></button>
