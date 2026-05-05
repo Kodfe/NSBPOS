@@ -374,6 +374,11 @@ export default function POSPage() {
         case 'F5': break;
         case 'F6': e.preventDefault(); void quickSaveBill(true); break;
         case 'F7': e.preventDefault(); void quickSaveBill(false); break;
+        case 'n':
+        case 'N':
+          e.preventDefault();
+          pos.addTab();
+          break;
         case 'Escape': setShowPayment(false); setShowCustomer(false); setShowShortcuts(false); break;
         case 'Enter': e.preventDefault(); void quickSaveBill(true); break;
         case 'Backspace':

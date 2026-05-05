@@ -10,6 +10,7 @@ const SHORTCUTS = [
   { key: 'Ctrl + S', desc: 'Save bill without printing' },
   { key: 'Ctrl + P', desc: 'Save & print bill' },
   { key: 'Ctrl + C', desc: 'Cancel invoice / clear bill' },
+  { key: 'N', desc: 'Open a new bill' },
   { key: 'F2', desc: 'Open product search' },
   { key: 'Ctrl + F', desc: 'Search product / customer' },
   { key: 'Arrow keys', desc: 'Move up / down / left / right' },
