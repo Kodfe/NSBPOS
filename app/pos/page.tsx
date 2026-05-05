@@ -363,6 +363,43 @@ export default function POSPage() {
         if (pos.activeBill?.items.length) setShowPayment(true);
         return;
       }
+      const focusedBillTab = (document.activeElement as HTMLElement | null)?.closest<HTMLButtonElement>('[data-pos-bill-tab]');
+      if (focusedBillTab) {
+        const currentTabId = focusedBillTab.dataset.posBillTab || pos.activeTabId;
+        const currentIndex = Math.max(0, pos.tabs.findIndex(tab => tab.id === currentTabId));
+        const focusBillTab = (id: string) => {
+          requestAnimationFrame(() => {
+            document.querySelector<HTMLButtonElement>(`[data-pos-bill-tab="${id}"]`)?.focus();
+          });
+        };
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          const nextTab = pos.tabs[(currentIndex + 1) % pos.tabs.length];
+          if (nextTab) {
+            pos.setActiveTabId(nextTab.id);
+            focusBillTab(nextTab.id);
+          }
+          return;
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const nextTab = pos.tabs[(currentIndex - 1 + pos.tabs.length) % pos.tabs.length];
+          if (nextTab) {
+            pos.setActiveTabId(nextTab.id);
+            focusBillTab(nextTab.id);
+          }
+          return;
+        }
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          if (pos.tabs.length > 1) {
+            const fallback = pos.tabs[currentIndex + 1] ?? pos.tabs[currentIndex - 1];
+            pos.closeTab(currentTabId);
+            if (fallback) focusBillTab(fallback.id);
+          }
+          return;
+        }
+      }
       if (tag === 'INPUT' || tag === 'TEXTAREA') {
         if (e.key === 'Escape') (e.target as HTMLInputElement).blur();
         return;
