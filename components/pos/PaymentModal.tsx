@@ -9,7 +9,7 @@ interface Props {
   hasCustomer?: boolean;
   customerName?: string;
   originalBillTotal?: number;   // set when editing a paid bill — triggers delta UI
-  onConfirm: (payment: PaymentDetails) => void;
+  onConfirm: (payment: PaymentDetails) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -36,6 +36,7 @@ export default function PaymentModal({
   const [cashInput, setCashInput] = useState(collectAmount.toFixed(0));
   const [upiRef, setUpiRef] = useState('');
   const [cardRef, setCardRef] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [saveCredit, setSaveCredit] = useState(false);          // save change → store credit (normal collect)
   const [refundAsCredit, setRefundAsCredit] = useState(false);  // give refund → store credit
 
@@ -48,10 +49,13 @@ export default function PaymentModal({
   const canSaveCredit = hasCashChange && hasCustomer;
 
   // ── Confirm ──────────────────────────────────────────────────────────────────
-  function handleConfirm() {
+  async function handleConfirm() {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
     // Case 1: Refund due (items removed, new total < original paid)
     if (isRefund) {
-      onConfirm({
+      await onConfirm({
         method: 'cash',
         amountPaid: 0,
         change: refundAsCredit ? 0 : refundAmount,
@@ -61,11 +65,11 @@ export default function PaymentModal({
     }
     // Case 2: No change (same total)
     if (isNoChange) {
-      onConfirm({ method: 'cash', amountPaid: 0, change: 0 });
+      await onConfirm({ method: 'cash', amountPaid: 0, change: 0 });
       return;
     }
     // Case 3: Normal payment or collect delta
-    onConfirm({
+    await onConfirm({
       method,
       amountPaid: method === 'cash' ? cashAmount : collectAmount,
       change,
@@ -74,6 +78,9 @@ export default function PaymentModal({
       cashAmount: method === 'cash' ? cashAmount : undefined,
       saveCreditAmount: canSaveCredit && saveCredit ? change : undefined,
     });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function setExact() { setCashInput(collectAmount.toFixed(0)); }
@@ -89,7 +96,7 @@ export default function PaymentModal({
       }
       if (event.key === 'Enter' && isValid) {
         event.preventDefault();
-        handleConfirm();
+        void handleConfirm();
       }
     }
     window.addEventListener('keydown', handleKey, true);
@@ -347,12 +354,12 @@ export default function PaymentModal({
         {/* ── Confirm button ─────────────────────────────────────────────────── */}
         <div className="px-4 pb-4">
           <button
-            onClick={handleConfirm}
-            disabled={!isValid}
+            onClick={() => void handleConfirm()}
+            disabled={!isValid || submitting}
             className="w-full py-3.5 bg-saffron-400 hover:bg-saffron-500 disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-base"
           >
-            <CheckCircle2 size={18} />
-            {isRefund
+            {submitting ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <CheckCircle2 size={18} />}
+            {submitting ? 'Processing...' : isRefund
               ? refundAsCredit
                 ? `Add ${formatCurrency(refundAmount)} to Store Credit`
                 : `Confirm — Give Back ${formatCurrency(refundAmount)}`

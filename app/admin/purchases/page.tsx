@@ -342,6 +342,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [storeSettings, setStoreSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [productSearch, setProductSearch] = useState('');
+  const [activeProductIndex, setActiveProductIndex] = useState(0);
   const [showProductModal, setShowProductModal] = useState(false);
   const [productForm, setProductForm] = useState<Omit<Product, 'id'>>(emptyProductForm([]));
   const [addingProduct, setAddingProduct] = useState(false);
@@ -358,6 +359,8 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<PurchaseItem[]>([emptyItem()]);
   const itemProductRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const productSearchRef = useRef<HTMLInputElement | null>(null);
+  const productMatchRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => { load(); }, []);
 
@@ -370,15 +373,51 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (!showModal) return;
+      const key = e.key.toLowerCase();
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
       if (e.key === 'F1' || (e.key === '?' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement))) {
         e.preventDefault();
         setShowAdminHelp(true);
       }
-      if (e.key === 'Escape') setShowAdminHelp(false);
+      if ((e.ctrlKey || e.metaKey) && key === 's') {
+        e.preventDefault();
+        void handleSave(false);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && key === 'p') {
+        e.preventDefault();
+        void handleSave(true);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && key === 'f') {
+        e.preventDefault();
+        productSearchRef.current?.focus();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && key === 'c') {
+        e.preventDefault();
+        if (confirm('Cancel this purchase bill?')) setShowModal(false);
+        return;
+      }
+      if (e.key === 'F2') {
+        e.preventDefault();
+        productSearchRef.current?.focus();
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (showAdminHelp) setShowAdminHelp(false);
+        else setShowModal(false);
+        return;
+      }
+      if ((e.key === 'Backspace' || e.key === 'Delete') && !isTyping) {
+        e.preventDefault();
+        setItems(prev => prev.slice(0, -1));
+      }
     }
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [showModal]);
+  }, [showModal, showAdminHelp, items, partyId, invoiceNumber, invoiceDate, paymentTermsDays, dueDate, totalDiscountExclTax, billDiscount, amountPaid, paymentMethod, notes]);
 
   async function load() {
     setLoading(true);
@@ -558,7 +597,8 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   const paid = parseFloat(amountPaid) || 0;
   const balance = total - paid;
 
-  async function handleSave() {
+  async function handleSave(printAfter = false) {
+    if (saving) return;
     if (!partyId) { toast.error('Select a party'); return; }
     if (items.every(it => !it.productName)) { toast.error('Add at least one item'); return; }
     const validItems = items.filter(it => it.productName);
@@ -577,7 +617,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
     try {
       const party = parties.find(p => p.id === partyId)!;
       const purchaseNumber = await generatePurchaseNumber();
-      await createPurchaseBill({
+      const billData = {
         purchaseNumber, partyId, partyName: party.name,
         items: validItems, invoiceNumber: invoiceNumber || undefined,
         invoiceDate: invoiceDate ? new Date(invoiceDate) : undefined,
@@ -588,10 +628,14 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
         paymentMethod: paid > 0 ? paymentMethod : undefined,
         status: paid >= billTotal ? 'paid' : paid > 0 ? 'partial' : 'received',
         notes: notes || undefined,
-      });
+      } satisfies Omit<PurchaseBill, 'id' | 'createdAt'>;
+      await createPurchaseBill(billData);
       await applyPurchaseToProducts(validItems);
       setProducts(await getAllProducts());
       toast.success('Purchase bill created');
+      if (printAfter) {
+        printPurchaseBill({ ...billData, id: '', createdAt: new Date() } as PurchaseBill, party, storeSettings);
+      }
       setShowModal(false); load();
     } catch (err: any) { toast.error(`Save failed: ${err?.message ?? 'Check Firestore connection'}`); }
     finally { setSaving(false); }
@@ -713,6 +757,9 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
         (p.barcode ?? '').includes(productSearch.trim());
     })
     .slice(0, 8);
+  useEffect(() => {
+    productMatchRefs.current[activeProductIndex]?.scrollIntoView({ block: 'nearest' });
+  }, [activeProductIndex, productMatches.length]);
   const getBillParty = (bill: PurchaseBill) => parties.find(p => p.id === bill.partyId);
 
   return (
@@ -909,16 +956,35 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                 <div className="col-span-10 relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
                   <input
+                    ref={productSearchRef}
                     value={productSearch}
-                    onChange={e => setProductSearch(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleProductEntry(); } }}
+                    onChange={e => { setProductSearch(e.target.value); setActiveProductIndex(0); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (productSearch.trim() && productMatches[activeProductIndex]) addItem(productMatches[activeProductIndex]);
+                        else handleProductEntry();
+                      } else if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        setActiveProductIndex(index => productMatches.length ? Math.min(productMatches.length - 1, index + 1) : 0);
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        setActiveProductIndex(index => Math.max(0, index - 1));
+                      }
+                    }}
                     className="input pl-9"
                     placeholder="Search previous products or scan barcode"
                   />
                   {productSearch && (
                     <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                      {productMatches.map(p => (
-                        <button key={p.id} onClick={() => addItem(p)} className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center justify-between">
+                      {productMatches.map((p, index) => (
+                        <button
+                          key={p.id}
+                          ref={el => { productMatchRefs.current[index] = el; }}
+                          onMouseEnter={() => setActiveProductIndex(index)}
+                          onClick={() => addItem(p)}
+                          className={`w-full px-3 py-2 text-left flex items-center justify-between ${index === activeProductIndex ? 'bg-saffron-50' : 'hover:bg-gray-50'}`}
+                        >
                           <span>
                             <span className="text-sm font-medium text-gray-800">{p.name}</span>
                             <span className="block text-[11px] text-gray-400">{p.barcode || 'No barcode'} - Stock {p.stock} {p.unit}</span>
@@ -1053,9 +1119,9 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
             </div>
             <div className="px-6 pb-6 flex gap-3 border-t pt-4">
               <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-saffron-400 hover:bg-saffron-500 disabled:bg-gray-200 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-colors">
+              <button onClick={() => void handleSave(false)} disabled={saving} className="flex-1 py-2.5 bg-saffron-400 hover:bg-saffron-500 disabled:bg-gray-200 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-colors">
                 {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Check size={16} />}
-                Create Purchase Bill
+                {saving ? 'Creating...' : 'Create Purchase Bill'}
               </button>
             </div>
           </div>
@@ -1086,6 +1152,22 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
               <div className="flex items-center justify-between gap-4">
                 <span className="text-gray-600">Add product from search or barcode</span>
                 <kbd className="px-2 py-1 bg-gray-100 border border-gray-200 rounded text-xs font-semibold text-gray-700">Enter</kbd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-gray-600">Save purchase bill</span>
+                <kbd className="px-2 py-1 bg-gray-100 border border-gray-200 rounded text-xs font-semibold text-gray-700">Ctrl + S</kbd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-gray-600">Create and print/download</span>
+                <kbd className="px-2 py-1 bg-gray-100 border border-gray-200 rounded text-xs font-semibold text-gray-700">Ctrl + P</kbd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-gray-600">Focus product search</span>
+                <kbd className="px-2 py-1 bg-gray-100 border border-gray-200 rounded text-xs font-semibold text-gray-700">F2 / Ctrl + F</kbd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-gray-600">Remove latest item</span>
+                <kbd className="px-2 py-1 bg-gray-100 border border-gray-200 rounded text-xs font-semibold text-gray-700">Del</kbd>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-gray-600">Close help</span>
