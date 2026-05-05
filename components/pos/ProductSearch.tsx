@@ -74,14 +74,20 @@ export default function ProductSearch({
     }
   }
 
-  const filtered = products.filter(product => {
-    const term = search.trim().toLowerCase();
-    const matchCat = category === 'All' || product.category === category;
-    const matchSearch = !term ||
-      product.name.toLowerCase().includes(term) ||
-      (product.brand ?? '').toLowerCase().includes(term) ||
+  const normalizedSearch = search.trim().toLowerCase().replace(/\s+/g, ' ');
+  const categoryProducts = products.filter(product => category === 'All' || product.category === category);
+  const exactProducts = normalizedSearch
+    ? categoryProducts.filter(product =>
+        product.name.trim().toLowerCase().replace(/\s+/g, ' ') === normalizedSearch ||
+        normalizeBarcode(product.barcode) === normalizeBarcode(search)
+      )
+    : [];
+  const filtered = exactProducts.length > 0 ? exactProducts : categoryProducts.filter(product => {
+    const matchSearch = !normalizedSearch ||
+      product.name.toLowerCase().includes(normalizedSearch) ||
+      (product.brand ?? '').toLowerCase().includes(normalizedSearch) ||
       (product.barcode ?? '').includes(search.trim());
-    return matchCat && matchSearch;
+    return matchSearch;
   });
 
   const createSeed = () => {
