@@ -78,7 +78,9 @@ export interface Bill {
   paidAt?: Date;
   cashierId?: string;
   machineId?: string;
+  machineName?: string;
   operatorId?: string;
+  operatorName?: string;
   notes?: string;
 }
 

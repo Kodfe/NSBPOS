@@ -1,13 +1,13 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
-import { Download, RefreshCw, TrendingUp, TrendingDown, Receipt, Package, CalendarDays } from 'lucide-react';
+import { Download, RefreshCw, TrendingUp, TrendingDown, Receipt, Package, CalendarDays, Monitor } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { getAllBills } from '@/lib/firestore';
-import { getAllProducts } from '@/lib/admin-firestore';
+import { getAllProducts, getMachines } from '@/lib/admin-firestore';
 import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
 import { formatCurrency } from '@/lib/utils';
-import { Bill, Product, StoreSettings } from '@/types';
+import { Bill, POSMachine, Product, StoreSettings } from '@/types';
 
 type Range = 'today' | 'yesterday' | '7days' | '30days' | 'month' | 'financialYear' | 'custom';
 type ReportTab = 'summary' | 'pl' | 'gst';
@@ -249,12 +249,14 @@ export default function ReportsPage() {
   const [tab, setTab]                 = useState<ReportTab>('summary');
   const [bills, setBills]             = useState<Bill[]>([]);
   const [products, setProducts]       = useState<Product[]>([]);
+  const [machines, setMachines]       = useState<POSMachine[]>([]);
   const [settings, setSettings]       = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading]         = useState(false);
 
   useEffect(() => {
     loadSettings().then(setSettings);
     getAllProducts().then(setProducts).catch(() => {});
+    getMachines().then(setMachines).catch(() => {});
   }, []);
 
   const load = useCallback(async () => {
@@ -280,6 +282,40 @@ export default function ReportsPage() {
   const upiSales      = bills.filter(b => b.paymentMethod === 'upi').reduce((s, b) => s + b.total, 0);
   const cardSales     = bills.filter(b => b.paymentMethod === 'card').reduce((s, b) => s + b.total, 0);
   const mixedSales    = bills.filter(b => b.paymentMethod === 'mixed').reduce((s, b) => s + b.total, 0);
+  type CounterSalesRow = {
+    id: string;
+    name: string;
+    bills: number;
+    items: number;
+    sales: number;
+    gst: number;
+    discount: number;
+    cash: number;
+    upi: number;
+    card: number;
+    mixed: number;
+  };
+  const machineMap = Object.fromEntries(machines.map(machine => [machine.id, machine]));
+  const counterMap: Record<string, CounterSalesRow> = {};
+  for (const bill of bills) {
+    const key = bill.machineId || 'unassigned';
+    const machine = bill.machineId ? machineMap[bill.machineId] : undefined;
+    const name = bill.machineName || machine?.label || machine?.name || (bill.machineId ? `Counter ${bill.machineId}` : 'Unassigned Counter');
+    if (!counterMap[key]) {
+      counterMap[key] = { id: key, name, bills: 0, items: 0, sales: 0, gst: 0, discount: 0, cash: 0, upi: 0, card: 0, mixed: 0 };
+    }
+    const row = counterMap[key];
+    row.bills += 1;
+    row.items += bill.items.reduce((sum, item) => sum + (item.weightKg ?? item.quantity), 0);
+    row.sales += bill.total;
+    row.gst += bill.totalGst;
+    row.discount += bill.totalDiscount;
+    if (bill.paymentMethod === 'cash') row.cash += bill.total;
+    else if (bill.paymentMethod === 'upi') row.upi += bill.total;
+    else if (bill.paymentMethod === 'card') row.card += bill.total;
+    else if (bill.paymentMethod === 'mixed') row.mixed += bill.total;
+  }
+  const counterRows = Object.values(counterMap).sort((a, b) => b.sales - a.sales);
 
   // ── P&L stats ─────────────────────────────────────────────────────────────
   type PLRow = { name: string; category: string; qtySold: number; revenue: number; cogs: number; profit: number; margin: number };
@@ -421,6 +457,54 @@ export default function ReportsPage() {
                     <p className="text-xs text-gray-400">{totalRevenue > 0 ? (((val as number) / totalRevenue) * 100).toFixed(1) : 0}%</p>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Counter-wise sales */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Monitor size={16} className="text-saffron-500" />
+                  <h3 className="text-sm font-bold text-gray-800">Counter-wise Sales</h3>
+                </div>
+                <p className="text-xs text-gray-400">{counterRows.length} counters</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                    <tr>
+                      <th className="text-left px-5 py-3">Counter</th>
+                      <th className="text-right px-5 py-3">Bills</th>
+                      <th className="text-right px-5 py-3">Items</th>
+                      <th className="text-right px-5 py-3">Sales</th>
+                      <th className="text-right px-5 py-3">Avg Bill</th>
+                      <th className="text-right px-5 py-3">GST</th>
+                      <th className="text-right px-5 py-3">Discount</th>
+                      <th className="text-right px-5 py-3">Cash</th>
+                      <th className="text-right px-5 py-3">UPI</th>
+                      <th className="text-right px-5 py-3">Card</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {counterRows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50">
+                        <td className="px-5 py-3 font-medium text-gray-800">{row.name}</td>
+                        <td className="px-5 py-3 text-right text-gray-600">{row.bills}</td>
+                        <td className="px-5 py-3 text-right text-gray-600">{row.items.toFixed(2)}</td>
+                        <td className="px-5 py-3 text-right font-semibold text-saffron-600">{formatCurrency(row.sales)}</td>
+                        <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.bills > 0 ? row.sales / row.bills : 0)}</td>
+                        <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.gst)}</td>
+                        <td className="px-5 py-3 text-right text-red-500">{formatCurrency(row.discount)}</td>
+                        <td className="px-5 py-3 text-right text-green-600">{formatCurrency(row.cash)}</td>
+                        <td className="px-5 py-3 text-right text-blue-600">{formatCurrency(row.upi)}</td>
+                        <td className="px-5 py-3 text-right text-purple-600">{formatCurrency(row.card)}</td>
+                      </tr>
+                    ))}
+                    {counterRows.length === 0 && (
+                      <tr><td colSpan={10} className="px-5 py-12 text-center text-gray-300">No counter sales for this period</td></tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 
