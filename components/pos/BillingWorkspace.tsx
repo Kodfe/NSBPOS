@@ -230,7 +230,7 @@ export default function BillingWorkspace({
               placeholder="Search item name, item code, or scan barcode"
             />
             <div className="flex items-center gap-2 px-3 text-gray-400">
-              <span className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] text-gray-400">F1</span>
+              <span className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] text-gray-400">F2</span>
               <button
                 onClick={() => bill.items[0] && onRemoveItem(bill.items[bill.items.length - 1].product.id)}
                 disabled={bill.items.length === 0}

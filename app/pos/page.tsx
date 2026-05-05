@@ -322,6 +322,16 @@ export default function POSPage() {
     function handleKey(e: KeyboardEvent) {
       if (document.querySelector('[data-pos-modal="true"]')) return;
       const key = e.key.toLowerCase();
+      if (e.key === 'F1') {
+        e.preventDefault();
+        setShowShortcuts(s => !s);
+        return;
+      }
+      if (e.key === '?' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        setShowShortcuts(s => !s);
+        return;
+      }
       if (e.altKey && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         document.querySelector<HTMLInputElement>('[placeholder*="Search item"]')?.focus();
@@ -364,7 +374,6 @@ export default function POSPage() {
         case 'F5': break;
         case 'F6': e.preventDefault(); void quickSaveBill(true); break;
         case 'F7': e.preventDefault(); void quickSaveBill(false); break;
-        case 'F1': case '?': e.preventDefault(); setShowShortcuts(s => !s); break;
         case 'Escape': setShowPayment(false); setShowCustomer(false); setShowShortcuts(false); break;
         case 'Enter': e.preventDefault(); void quickSaveBill(true); break;
         case 'Backspace':
