@@ -45,6 +45,7 @@ export default function BillingWorkspace({
   const [activeResultIndex, setActiveResultIndex] = useState(0);
   const [weightProduct, setWeightProduct] = useState<Product | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const resultRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const priceRefs = useRef<Array<HTMLInputElement | null>>([]);
   const qtyRefs = useRef<Array<HTMLInputElement | null>>([]);
   const barcodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -137,6 +138,10 @@ export default function BillingWorkspace({
     })
     .slice(0, search ? 8 : 0);
 
+  useEffect(() => {
+    resultRefs.current[activeResultIndex]?.scrollIntoView({ block: 'nearest' });
+  }, [activeResultIndex, filteredProducts.length]);
+
   const createSeed = () => {
     const barcode = normalizeBarcode(search);
     if (/^\d{4,}$/.test(barcode)) return { barcode };
@@ -202,6 +207,7 @@ export default function BillingWorkspace({
               {filteredProducts.map((product, index) => (
                 <button
                   key={product.id}
+                  ref={el => { resultRefs.current[index] = el; }}
                   onMouseEnter={() => setActiveResultIndex(index)}
                   onClick={() => addProduct(product)}
                   className={`grid w-full grid-cols-[1fr_120px] border-t border-gray-100 px-3 py-2 text-left ${index === activeResultIndex ? 'bg-blue-50' : 'hover:bg-blue-50'}`}
