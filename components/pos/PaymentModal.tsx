@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, Banknote, Smartphone, CreditCard, CheckCircle2 } from 'lucide-react';
 import { PaymentDetails } from '@/types';
 import { formatCurrency } from '@/lib/utils';
@@ -37,6 +37,7 @@ export default function PaymentModal({
   const [upiRef, setUpiRef] = useState('');
   const [cardRef, setCardRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [saveCredit, setSaveCredit] = useState(false);          // save change → store credit (normal collect)
   const [refundAsCredit, setRefundAsCredit] = useState(false);  // give refund → store credit
 
@@ -50,7 +51,8 @@ export default function PaymentModal({
 
   // ── Confirm ──────────────────────────────────────────────────────────────────
   async function handleConfirm() {
-    if (submitting) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
     // Case 1: Refund due (items removed, new total < original paid)
@@ -79,6 +81,7 @@ export default function PaymentModal({
       saveCreditAmount: canSaveCredit && saveCredit ? change : undefined,
     });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Check, Keyboard, Store, Clock, Wifi, WifiOff, Receipt, Monitor, LockKeyhole, LogOut, Package, X } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -96,6 +96,8 @@ export default function POSPage() {
   const [productForm, setProductForm] = useState<Omit<Product, 'id'>>(emptyPosProduct([]));
   const [addingProduct, setAddingProduct] = useState(false);
   const [receiptAutoPrint, setReceiptAutoPrint] = useState(false);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const paymentProcessingRef = useRef(false);
 
   const pos = usePOS();
   const uniqueProductList = useMemo(() => uniqueProducts(products), [products]);
@@ -225,6 +227,9 @@ export default function POSPage() {
   }, [pos, productForm]);
 
   const handlePaymentConfirm = useCallback(async (payment: PaymentDetails) => {
+    if (paymentProcessingRef.current) return;
+    paymentProcessingRef.current = true;
+    setPaymentProcessing(true);
     try {
       let billNumber: string;
       try { billNumber = await generateBillNumber(); }
@@ -267,6 +272,9 @@ export default function POSPage() {
     } catch (err) {
       toast.error('Payment failed. Please try again.');
       console.error(err);
+    } finally {
+      paymentProcessingRef.current = false;
+      setPaymentProcessing(false);
     }
   }, [pos, posSession]);
 
