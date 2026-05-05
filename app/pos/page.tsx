@@ -379,6 +379,11 @@ export default function POSPage() {
           e.preventDefault();
           pos.addTab();
           break;
+        case 'b':
+        case 'B':
+          e.preventDefault();
+          document.querySelector<HTMLButtonElement>('[data-pos-bill-tab][data-active="true"]')?.focus();
+          break;
         case 'Escape': setShowPayment(false); setShowCustomer(false); setShowShortcuts(false); break;
         case 'Enter': e.preventDefault(); void quickSaveBill(true); break;
         case 'Backspace':
