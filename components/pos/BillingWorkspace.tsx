@@ -43,6 +43,7 @@ export default function BillingWorkspace({
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [activeResultIndex, setActiveResultIndex] = useState(0);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [weightProduct, setWeightProduct] = useState<Product | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const resultRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -54,6 +55,22 @@ export default function BillingWorkspace({
   const lastBarcodeRef = useRef<{ value: string; at: number } | null>(null);
 
   useEffect(() => { searchRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    if (!selectedProductId && bill.items.length > 0) {
+      setSelectedProductId(bill.items[bill.items.length - 1].product.id);
+      return;
+    }
+    if (selectedProductId && !bill.items.some(item => item.product.id === selectedProductId)) {
+      setSelectedProductId(bill.items[bill.items.length - 1]?.product.id ?? null);
+    }
+  }, [bill.items, selectedProductId]);
+
+  useEffect(() => {
+    if (selectedProductId) document.body.dataset.posSelectedProductId = selectedProductId;
+    else delete document.body.dataset.posSelectedProductId;
+    return () => { delete document.body.dataset.posSelectedProductId; };
+  }, [selectedProductId]);
 
   useEffect(() => {
     function handleWorkspaceKey(event: KeyboardEvent) {
@@ -147,6 +164,10 @@ export default function BillingWorkspace({
     } else if (event.key === 'Escape') {
       event.preventDefault();
       searchRef.current?.focus();
+    } else if (event.key === 'Delete') {
+      event.preventDefault();
+      const item = bill.items[row];
+      if (item) onRemoveItem(item.product.id);
     }
   }
 
@@ -232,9 +253,12 @@ export default function BillingWorkspace({
             <div className="flex items-center gap-2 px-3 text-gray-400">
               <span title="F2 opens product search" className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] text-gray-400">F2</span>
               <button
-                onClick={() => bill.items[0] && onRemoveItem(bill.items[bill.items.length - 1].product.id)}
+                onClick={() => {
+                  const targetId = selectedProductId ?? bill.items[bill.items.length - 1]?.product.id;
+                  if (targetId) onRemoveItem(targetId);
+                }}
                 disabled={bill.items.length === 0}
-                title="Delete latest item"
+                title="Delete selected item"
                 className="rounded p-1 text-red-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-30"
               >
                 <Trash2 size={15} />
@@ -302,7 +326,12 @@ export default function BillingWorkspace({
             const itemStockStatus = stockStatus(item.product, quantityValue);
 
             return (
-              <div key={item.product.id} className="grid grid-cols-[54px_minmax(360px,1fr)_170px_105px_118px_180px_160px_48px] border-b border-gray-200 text-sm">
+              <div
+                key={item.product.id}
+                onClick={() => setSelectedProductId(item.product.id)}
+                onFocusCapture={() => setSelectedProductId(item.product.id)}
+                className={`grid grid-cols-[54px_minmax(360px,1fr)_170px_105px_118px_180px_160px_48px] border-b border-gray-200 text-sm ${selectedProductId === item.product.id ? 'bg-blue-50/70' : ''}`}
+              >
                 <div className="border-r border-gray-100 px-3 py-3 text-gray-700">{index + 1}</div>
                 <div className="min-w-0 border-r border-gray-100 px-3 py-2">
                   <p className="truncate text-gray-900">{item.product.name}</p>
@@ -369,7 +398,7 @@ export default function BillingWorkspace({
                 </div>
                 <div className="border-r border-gray-100 px-3 py-3 text-right font-semibold">&#8377; {item.total.toFixed(2)}</div>
                 <div className="px-3 py-3 text-center">
-                  <button onClick={() => onRemoveItem(item.product.id)} className="text-red-300 hover:text-red-500"><Trash2 size={15} /></button>
+                  <button onClick={() => onRemoveItem(item.product.id)} className="text-red-300 hover:text-red-500" title="Delete item"><Trash2 size={15} /></button>
                 </div>
               </div>
             );

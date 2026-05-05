@@ -384,7 +384,11 @@ export default function POSPage() {
         case 'Backspace':
         case 'Delete':
           e.preventDefault();
-          if (pos.activeBill?.items.length) pos.removeItem(pos.activeBill.items[pos.activeBill.items.length - 1].product.id);
+          if (pos.activeBill?.items.length) {
+            const selectedProductId = document.body.dataset.posSelectedProductId;
+            const target = pos.activeBill.items.find(item => item.product.id === selectedProductId) ?? pos.activeBill.items[pos.activeBill.items.length - 1];
+            pos.removeItem(target.product.id);
+          }
           break;
         case '1': case '2': case '3': case '4': case '5':
           const idx = parseInt(e.key) - 1;
