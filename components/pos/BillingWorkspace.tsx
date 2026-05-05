@@ -245,6 +245,9 @@ export default function BillingWorkspace({
                 } else if (e.key === 'ArrowRight' && bill.items.length > 0) {
                   e.preventDefault();
                   focusCell(bill.items.length - 1, 3);
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setSearch('');
                 }
               }}
               className="flex-1 border-0 px-4 py-2 text-sm outline-none"
