@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { X, Printer } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { Bill, StoreSettings } from '@/types';
@@ -16,13 +16,35 @@ interface Props {
 
 export default function ReceiptModal({ bill, settings = DEFAULT_SETTINGS, onClose, onNewBill, autoPrint = false }: Props) {
   const receiptRef = useRef<HTMLDivElement>(null);
-  const handlePrint = useReactToPrint({ contentRef: receiptRef });
+  const finishPrint = useCallback(() => {
+    onClose();
+    onNewBill();
+  }, [onClose, onNewBill]);
+  const handlePrint = useReactToPrint({
+    contentRef: receiptRef,
+    onAfterPrint: finishPrint,
+  });
 
   useEffect(() => {
     if (!autoPrint) return;
     const timer = window.setTimeout(() => handlePrint(), 250);
     return () => window.clearTimeout(timer);
   }, [autoPrint, handlePrint]);
+
+  useEffect(() => {
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+      if (event.key === 'Enter' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p')) {
+        event.preventDefault();
+        handlePrint();
+      }
+    }
+    window.addEventListener('keydown', handleKey, true);
+    return () => window.removeEventListener('keydown', handleKey, true);
+  }, [handlePrint, onClose]);
 
   // "You Saved" calculation: MRP − actual paid, per line
   const totalSavings = bill.items.reduce((sum, item) => {
@@ -49,7 +71,7 @@ export default function ReceiptModal({ bill, settings = DEFAULT_SETTINGS, onClos
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in">
+    <div data-pos-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 animate-slide-up flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b">

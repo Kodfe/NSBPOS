@@ -313,12 +313,38 @@ export default function POSPage() {
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (document.querySelector('[data-pos-modal="true"]')) return;
+      const key = e.key.toLowerCase();
       if (e.altKey && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         document.querySelector<HTMLInputElement>('[placeholder*="Search item"]')?.focus();
         return;
       }
       const tag = (e.target as HTMLElement).tagName;
+      if ((e.ctrlKey || e.metaKey) && key === 'p') {
+        e.preventDefault();
+        void quickSaveBill(true);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && key === 's') {
+        e.preventDefault();
+        void quickSaveBill(false);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && key === 'c') {
+        e.preventDefault();
+        if (pos.activeBill?.items.length && confirm('Cancel this invoice and clear all items?')) pos.clearBill();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && key === 'f') {
+        e.preventDefault();
+        document.querySelector<HTMLInputElement>('[placeholder*="Search item"]')?.focus();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (pos.activeBill?.items.length) setShowPayment(true);
+        return;
+      }
       if (tag === 'INPUT' || tag === 'TEXTAREA') {
         if (e.key === 'Escape') (e.target as HTMLInputElement).blur();
         return;
@@ -327,11 +353,13 @@ export default function POSPage() {
         case 'F2': e.preventDefault(); document.querySelector<HTMLInputElement>('[placeholder*="Search item"]')?.focus(); break;
         case 'F3': e.preventDefault(); if (pos.activeBill?.items.length) setShowPayment(true); break;
         case 'F4': e.preventDefault(); pos.addTab(); break;
-        case 'F5': e.preventDefault(); pos.holdBill(); break;
+        case 'F5': break;
         case 'F6': e.preventDefault(); void quickSaveBill(true); break;
         case 'F7': e.preventDefault(); void quickSaveBill(false); break;
         case 'F1': case '?': e.preventDefault(); setShowShortcuts(s => !s); break;
         case 'Escape': setShowPayment(false); setShowCustomer(false); setShowShortcuts(false); break;
+        case 'Enter': e.preventDefault(); void quickSaveBill(true); break;
+        case 'Backspace':
         case 'Delete':
           e.preventDefault();
           if (pos.activeBill?.items.length) pos.removeItem(pos.activeBill.items[pos.activeBill.items.length - 1].product.id);

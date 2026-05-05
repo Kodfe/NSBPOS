@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Banknote, Smartphone, CreditCard, CheckCircle2 } from 'lucide-react';
 import { PaymentDetails } from '@/types';
 import { formatCurrency } from '@/lib/utils';
@@ -81,8 +81,24 @@ export default function PaymentModal({
     setCashInput((Math.ceil(collectAmount / amount) * amount).toString());
   }
 
+  useEffect(() => {
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+      if (event.key === 'Enter' && isValid) {
+        event.preventDefault();
+        handleConfirm();
+      }
+    }
+    window.addEventListener('keydown', handleKey, true);
+    return () => window.removeEventListener('keydown', handleKey, true);
+  });
+
   return (
     <div
+      data-pos-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in"
       onClick={e => e.target === e.currentTarget && onClose()}
     >

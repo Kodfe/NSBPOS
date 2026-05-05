@@ -148,7 +148,7 @@ export default function CartPanel({
                     <p className="text-xs text-gray-500">Cash sale · add customer</p>
                   )}
                 </div>
-                <span className="text-[11px] font-semibold text-saffron-600">F5</span>
+                <span className="text-[11px] font-semibold text-saffron-600">Edit</span>
               </div>
             </button>
 

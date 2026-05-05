@@ -4,16 +4,20 @@ import { X } from 'lucide-react';
 interface Props { onClose: () => void }
 
 const SHORTCUTS = [
-  { key: 'Alt + B', desc: 'POS billing search' },
-  { key: 'F6', desc: 'Save & print bill' },
-  { key: 'F7', desc: 'Save bill without printing' },
-  { key: 'Arrow keys', desc: 'Move cursor up / down / right / left' },
-  { key: 'Delete', desc: 'Delete selected or latest item' },
-  { key: 'Esc', desc: 'Undo / return to previous page' },
-  { key: 'P', desc: 'Change sale price of item' },
-  { key: 'Q', desc: 'Change quantity of item' },
-  { key: 'F2', desc: 'Focus search / barcode scanner' },
-  { key: 'F3', desc: 'Open payment' },
+  { key: 'Enter', desc: 'Add selected item / confirm / print' },
+  { key: 'Tab', desc: 'Move between fields' },
+  { key: 'Esc', desc: 'Cancel action / close popup' },
+  { key: 'Ctrl + S', desc: 'Save bill without printing' },
+  { key: 'Ctrl + P', desc: 'Save & print bill' },
+  { key: 'Ctrl + C', desc: 'Cancel invoice / clear bill' },
+  { key: 'F2', desc: 'Open product search' },
+  { key: 'Ctrl + F', desc: 'Search product / customer' },
+  { key: 'Arrow keys', desc: 'Move up / down / left / right' },
+  { key: 'Backspace / Del', desc: 'Remove selected or latest item' },
+  { key: 'P', desc: 'Change sale price' },
+  { key: 'Q', desc: 'Change quantity' },
+  { key: 'Ctrl + Enter', desc: 'Quick checkout' },
+  { key: 'F1 / ?', desc: 'Show shortcuts help' },
 ];
 
 export default function ShortcutsHelp({ onClose }: Props) {

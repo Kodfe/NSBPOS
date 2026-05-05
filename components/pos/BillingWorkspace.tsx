@@ -42,6 +42,7 @@ export default function BillingWorkspace({
 }: Props) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
+  const [activeResultIndex, setActiveResultIndex] = useState(0);
   const [weightProduct, setWeightProduct] = useState<Product | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const priceRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -85,6 +86,7 @@ export default function BillingWorkspace({
 
   function handleSearchChange(value: string) {
     setSearch(value);
+    setActiveResultIndex(0);
     if (barcodeTimerRef.current) clearTimeout(barcodeTimerRef.current);
     const barcode = normalizeBarcode(value);
     if (/^\d{8,}$/.test(barcode)) {
@@ -164,7 +166,14 @@ export default function BillingWorkspace({
               onKeyDown={e => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  submitBarcode(search);
+                  if (filteredProducts[activeResultIndex]) addProduct(filteredProducts[activeResultIndex]);
+                  else submitBarcode(search);
+                } else if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setActiveResultIndex(index => filteredProducts.length ? Math.min(filteredProducts.length - 1, index + 1) : 0);
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setActiveResultIndex(index => Math.max(0, index - 1));
                 }
               }}
               className="flex-1 border-0 px-4 py-2 text-sm outline-none"
@@ -190,8 +199,13 @@ export default function BillingWorkspace({
                 <span>Item Name</span>
                 <span className="text-right">Price</span>
               </div>
-              {filteredProducts.map(product => (
-                <button key={product.id} onClick={() => addProduct(product)} className="grid w-full grid-cols-[1fr_120px] border-t border-gray-100 px-3 py-2 text-left hover:bg-blue-50">
+              {filteredProducts.map((product, index) => (
+                <button
+                  key={product.id}
+                  onMouseEnter={() => setActiveResultIndex(index)}
+                  onClick={() => addProduct(product)}
+                  className={`grid w-full grid-cols-[1fr_120px] border-t border-gray-100 px-3 py-2 text-left ${index === activeResultIndex ? 'bg-blue-50' : 'hover:bg-blue-50'}`}
+                >
                   <span>
                     <span className="flex items-center gap-2 text-sm text-gray-900">
                       <span className="truncate">{product.name}</span>
