@@ -1,7 +1,7 @@
 const { app, BrowserWindow, Menu, ipcMain, net, shell } = require('electron')
 const path = require('path')
 
-const POS_URL = process.env.NSB_POS_URL || 'https://nsbpos-production.up.railway.app/pos'
+const POS_URL = process.env.NSB_POS_URL || 'https://nsbpos-ia77.vercel.app/pos'
 
 let mainWindow = null
 let showingOffline = false
