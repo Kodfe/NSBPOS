@@ -14,6 +14,7 @@ const SHORTCUTS = [
   { key: 'B', desc: 'Go to active bill tab' },
   { key: 'Arrow L/R', desc: 'Switch bills when on bill tab' },
   { key: 'F2', desc: 'Open product search' },
+  { key: 'Alt + C', desc: 'Search or add customer' },
   { key: 'Ctrl + F', desc: 'Search product / customer' },
   { key: 'Arrow keys', desc: 'Move up / down / left / right' },
   { key: 'Backspace / Del', desc: 'Remove selected item, or close bill tab when on bill' },

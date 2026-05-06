@@ -27,6 +27,7 @@ import { normalizeBarcode } from '@/lib/utils';
 import { Bill, PaymentDetails, Product, Category, StoreSettings, POSMachine, Operator } from '@/types';
 
 const POS_SESSION_KEY = 'nsb_pos_machine_session';
+const CUSTOMER_SHORTCUT_UPDATE_KEY = 'nsb_pos_customer_shortcut_update_seen_v1';
 const OPERATOR_INACTIVITY_LOGOUT_MS = 10 * 60 * 1000;
 const OPERATOR_HEARTBEAT_MS = 30 * 1000;
 const OPERATOR_ACTIVITY_EVENTS = ['keydown', 'mousedown', 'mousemove', 'touchstart', 'scroll', 'wheel', 'click'];
@@ -97,6 +98,7 @@ export default function POSPage() {
   const [addingProduct, setAddingProduct] = useState(false);
   const [receiptAutoPrint, setReceiptAutoPrint] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [showCustomerShortcutUpdate, setShowCustomerShortcutUpdate] = useState(false);
   const paymentProcessingRef = useRef(false);
 
   const pos = usePOS();
@@ -118,6 +120,16 @@ export default function POSPage() {
   useEffect(() => {
     loadSettings().then(s => setStoreSettings(s));
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setShowCustomerShortcutUpdate(localStorage.getItem(CUSTOMER_SHORTCUT_UPDATE_KEY) !== 'true');
+  }, []);
+
+  function dismissCustomerShortcutUpdate() {
+    localStorage.setItem(CUSTOMER_SHORTCUT_UPDATE_KEY, 'true');
+    setShowCustomerShortcutUpdate(false);
+  }
 
   useEffect(() => {
     let active = true;
@@ -335,6 +347,11 @@ export default function POSPage() {
       if (e.altKey && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         document.querySelector<HTMLInputElement>('[placeholder*="Search item"]')?.focus();
+        return;
+      }
+      if (e.altKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        setShowCustomer(true);
         return;
       }
       const tag = (e.target as HTMLElement).tagName;
@@ -787,6 +804,32 @@ export default function POSPage() {
       </div>
 
       {/* Modals */}
+      {showCustomerShortcutUpdate && (
+        <div className="fixed bottom-12 right-4 z-40 w-[340px] rounded-xl border border-saffron-200 bg-white shadow-2xl">
+          <div className="flex items-start gap-3 p-4">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-saffron-50 text-saffron-600">
+              <Keyboard size={18} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-bold text-gray-900">Customer shortcut added</p>
+                <button
+                  type="button"
+                  onClick={dismissCustomerShortcutUpdate}
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                  aria-label="Close customer shortcut update"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-gray-600">
+                Press <kbd className="rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold">Alt + C</kbd> to search existing customers or add a new customer.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showPayment && pos.activeBill && (
         <PaymentModal
           total={pos.activeBill.total}
