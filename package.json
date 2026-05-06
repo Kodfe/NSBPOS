@@ -36,12 +36,14 @@
     "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "rcedit": "^4.0.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
   "build": {
     "appId": "com.nsbaazaar.pos",
     "productName": "NSB POS",
+    "afterPack": "scripts/patch-electron-icon.cjs",
     "files": [
       "desktop/**/*",
       "img/**/*",
