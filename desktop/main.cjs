@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, ipcMain, net, shell } = require('electron')
 const path = require('path')
 
 const POS_URL = process.env.NSB_POS_URL || 'https://nsbpos-ia77.vercel.app/pos'
+const APP_ICON = path.join(__dirname, '..', 'img', 'Img_1756804186972 (1) (1).ico')
 
 let mainWindow = null
 let showingOffline = false
@@ -136,6 +137,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 700,
     title: 'NSB POS',
+    icon: APP_ICON,
     backgroundColor: '#f6f7fb',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

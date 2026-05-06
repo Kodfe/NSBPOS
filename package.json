@@ -44,6 +44,7 @@
     "productName": "NSB POS",
     "files": [
       "desktop/**/*",
+      "img/**/*",
       "package.json"
     ],
     "directories": {
@@ -51,9 +52,12 @@
     },
     "win": {
       "target": "nsis",
+      "icon": "img/Img_1756804186972 (1) (1).ico",
       "signAndEditExecutable": false
     },
     "nsis": {
+      "installerIcon": "img/Img_1756804186972 (1) (1).ico",
+      "uninstallerIcon": "img/Img_1756804186972 (1) (1).ico",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
