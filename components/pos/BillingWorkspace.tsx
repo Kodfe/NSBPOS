@@ -145,10 +145,31 @@ export default function BillingWorkspace({
   }
 
   function selectNumberInput(event: React.FocusEvent<HTMLInputElement>) {
+    event.currentTarget.dataset.replaceOnNextEdit = 'true';
+    event.currentTarget.select();
     requestAnimationFrame(() => event.currentTarget.select());
   }
 
+  function replaceQuantityOnFirstKey(event: React.KeyboardEvent<HTMLInputElement>, product: Product) {
+    if (
+      event.currentTarget.dataset.replaceOnNextEdit !== 'true' ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      !/^\d$/.test(event.key)
+    ) {
+      return false;
+    }
+
+    event.preventDefault();
+    event.currentTarget.dataset.replaceOnNextEdit = 'false';
+    updateLineQty(product, Number(event.key));
+    return true;
+  }
+
   function handleCellKey(event: React.KeyboardEvent<HTMLInputElement>, row: number, col: number) {
+    event.currentTarget.dataset.replaceOnNextEdit = 'false';
+
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       focusCell(row + 1, col);
@@ -415,7 +436,10 @@ export default function BillingWorkspace({
                       onChange={e => updateLineQty(item.product, parseFloat(e.target.value) || (item.product.isLoose ? 0.01 : 1))}
                       onFocus={selectNumberInput}
                       onMouseUp={e => e.preventDefault()}
-                      onKeyDown={e => handleCellKey(e, index, 3)}
+                      onKeyDown={e => {
+                        if (replaceQuantityOnFirstKey(e, item.product)) return;
+                        handleCellKey(e, index, 3);
+                      }}
                       className="w-12 bg-white py-1.5 text-center text-sm outline-none"
                     />
                     <button onClick={() => updateLineQty(item.product, quantityValue + qtyStep)} className="px-2 py-1.5 hover:bg-gray-100"><ChevronUp size={13} /></button>
