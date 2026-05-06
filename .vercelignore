@@ -1,0 +1,6 @@
+desktop-dist
+desktop-dist/**
+whatsapp-alert
+whatsapp-alert/**
+*.zip
+*.tsbuildinfo
