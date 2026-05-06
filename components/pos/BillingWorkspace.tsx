@@ -193,13 +193,20 @@ export default function BillingWorkspace({
 
   const normalizedSearch = search.trim().toLowerCase().replace(/\s+/g, ' ');
   const categoryProducts = products.filter(product => category === 'All' || product.category === category);
+  const startsWithSearch = (value?: string) => {
+    const text = value?.trim().toLowerCase().replace(/\s+/g, ' ') ?? '';
+    return text === normalizedSearch || text.startsWith(normalizedSearch) || text.split(' ').some(part => part.startsWith(normalizedSearch));
+  };
   const exactProducts = normalizedSearch
     ? categoryProducts.filter(product =>
         product.name.trim().toLowerCase().replace(/\s+/g, ' ') === normalizedSearch ||
         normalizeBarcode(product.barcode) === normalizeBarcode(search)
       )
     : [];
-  const filteredProducts = (exactProducts.length > 0 ? exactProducts : categoryProducts.filter(product => {
+  const prefixProducts = normalizedSearch
+    ? categoryProducts.filter(product => startsWithSearch(product.name) || startsWithSearch(product.brand))
+    : [];
+  const filteredProducts = (exactProducts.length > 0 ? exactProducts : prefixProducts.length > 0 ? prefixProducts : categoryProducts.filter(product => {
     const matchSearch = !normalizedSearch ||
       product.name.toLowerCase().includes(normalizedSearch) ||
       (product.brand ?? '').toLowerCase().includes(normalizedSearch) ||
