@@ -144,6 +144,10 @@ export default function BillingWorkspace({
     refs[safeCol].current[safeRow]?.select();
   }
 
+  function selectNumberInput(event: React.FocusEvent<HTMLInputElement>) {
+    requestAnimationFrame(() => event.currentTarget.select());
+  }
+
   function handleCellKey(event: React.KeyboardEvent<HTMLInputElement>, row: number, col: number) {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
@@ -353,6 +357,8 @@ export default function BillingWorkspace({
                         max={100}
                         value={item.discount}
                         onChange={e => onUpdateDiscount(item.product.id, Number(e.target.value), item.discountAmount ?? 0)}
+                        onFocus={selectNumberInput}
+                        onMouseUp={e => e.preventDefault()}
                         onKeyDown={e => handleCellKey(e, index, 0)}
                         className="w-10 outline-none"
                       />
@@ -366,6 +372,8 @@ export default function BillingWorkspace({
                         min={0}
                         value={item.discountAmount ?? 0}
                         onChange={e => onUpdateDiscount(item.product.id, item.discount, Number(e.target.value))}
+                        onFocus={selectNumberInput}
+                        onMouseUp={e => e.preventDefault()}
                         onKeyDown={e => handleCellKey(e, index, 1)}
                         className="w-14 outline-none"
                       />
@@ -382,6 +390,8 @@ export default function BillingWorkspace({
                     min={0}
                     value={item.product.price}
                     onChange={e => onUpdatePrice(item.product.id, parseFloat(e.target.value) || 0)}
+                    onFocus={selectNumberInput}
+                    onMouseUp={e => e.preventDefault()}
                     onKeyDown={e => handleCellKey(e, index, 2)}
                     className="ml-auto w-24 rounded border border-transparent bg-transparent px-2 py-1 text-right outline-none focus:border-blue-300 focus:bg-white"
                   />
@@ -396,6 +406,8 @@ export default function BillingWorkspace({
                       step={item.product.isLoose ? 0.01 : 1}
                       value={quantityValue}
                       onChange={e => updateLineQty(item.product, parseFloat(e.target.value) || (item.product.isLoose ? 0.01 : 1))}
+                      onFocus={selectNumberInput}
+                      onMouseUp={e => e.preventDefault()}
                       onKeyDown={e => handleCellKey(e, index, 3)}
                       className="w-12 bg-white py-1.5 text-center text-sm outline-none"
                     />
