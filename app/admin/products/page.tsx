@@ -1,11 +1,12 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { Plus, Search, Download, Upload, Pencil, Trash2, Scale, X, Check, AlertTriangle, FileText } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
 import { Product, Category, StoreSettings } from '@/types';
-import { getAllProducts, adminAddProduct, adminUpdateProduct, adminDeleteProduct, bulkUpsertProducts } from '@/lib/admin-firestore';
+import { addManagerLog, getAllProducts, adminAddProduct, adminUpdateProduct, adminDeleteProduct, bulkUpsertProducts } from '@/lib/admin-firestore';
 import { getCategories } from '@/lib/categories-firestore';
 import { createGeneratedBarcode, downloadBarcodeSvg } from '@/lib/barcodes';
 import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
@@ -87,6 +88,8 @@ function normalizeBillBookRows(rows: Record<string, unknown>[]) {
 }
 
 export default function ProductsPage() {
+  const pathname = usePathname();
+  const isManagerMode = pathname.startsWith('/manage');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState('');
@@ -101,6 +104,18 @@ export default function ProductsPage() {
   const [uploading, setUploading] = useState(false);
   const [storeSettings, setStoreSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  function managerSession() {
+    if (!isManagerMode || typeof window === 'undefined') return null;
+    try { return JSON.parse(sessionStorage.getItem('nsb_manager_auth') || 'null') as { operatorId: string; operatorName: string } | null; }
+    catch { return null; }
+  }
+
+  async function logManagerAdd(targetId: string, targetName: string, details?: string) {
+    const session = managerSession();
+    if (!session) return;
+    await addManagerLog({ operatorId: session.operatorId, operatorName: session.operatorName, action: 'add', module: 'products', targetId, targetName, details });
+  }
 
   useEffect(() => {
     loadProducts();
@@ -118,7 +133,10 @@ export default function ProductsPage() {
   }
 
   function openAdd() { setEditing(null); setForm(emptyProduct(categories)); setShowModal(true); }
-  function openEdit(p: Product) { setEditing(p); setForm({ ...p }); setShowModal(true); }
+  function openEdit(p: Product) {
+    if (isManagerMode) { toast.error('Managers can add products only'); return; }
+    setEditing(p); setForm({ ...p }); setShowModal(true);
+  }
 
   function downloadBarcodeLabel() {
     const barcode = form.barcode?.trim() || createGeneratedBarcode(products);
@@ -139,10 +157,12 @@ export default function ProductsPage() {
     setSaving(true);
     try {
       if (editing) {
+        if (isManagerMode) { toast.error('Managers can add products only'); return; }
         await adminUpdateProduct(editing.id, form);
         toast.success('Product updated');
       } else {
-        await adminAddProduct(form);
+        const id = await adminAddProduct(form);
+        await logManagerAdd(id, form.name, `Added product ${form.name}`);
         toast.success('Product added');
       }
       setShowModal(false);
@@ -152,6 +172,7 @@ export default function ProductsPage() {
   }
 
   async function handleDelete(p: Product) {
+    if (isManagerMode) { toast.error('Managers cannot delete products'); return; }
     if (!confirm(`Delete "${p.name}"?`)) return;
     try { await adminDeleteProduct(p.id); toast.success('Deleted'); loadProducts(); }
     catch { toast.error('Delete failed'); }
@@ -244,6 +265,7 @@ export default function ProductsPage() {
   }
 
   async function handleBulkUpload() {
+    if (isManagerMode) { toast.error('Managers can add one product at a time only'); return; }
     setUploading(true);
     try {
       const count = await bulkUpsertProducts(bulkRows);
@@ -280,15 +302,21 @@ export default function ProductsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-            <FileText size={14} /> Template
-          </button>
-          <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-            <Download size={14} /> Export CSV
-          </button>
-          <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 border border-saffron-200 text-saffron-700 rounded-lg text-sm hover:bg-saffron-50">
-            <Upload size={14} /> Import CSV/Excel
-          </button>
+          {isManagerMode ? (
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Manager: add only</span>
+          ) : (
+            <>
+              <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                <FileText size={14} /> Template
+              </button>
+              <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                <Download size={14} /> Export CSV
+              </button>
+              <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 border border-saffron-200 text-saffron-700 rounded-lg text-sm hover:bg-saffron-50">
+                <Upload size={14} /> Import CSV/Excel
+              </button>
+            </>
+          )}
           <button onClick={openAdd} className="flex items-center gap-1.5 px-4 py-2 bg-saffron-400 hover:bg-saffron-500 text-white rounded-lg text-sm font-semibold">
             <Plus size={14} /> Add Product
           </button>
@@ -368,12 +396,16 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-lg transition-colors">
-                        <Pencil size={14} />
-                      </button>
-                      <button onClick={() => handleDelete(p)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                        <Trash2 size={14} />
-                      </button>
+                      {!isManagerMode && (
+                        <>
+                          <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-lg transition-colors">
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => handleDelete(p)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

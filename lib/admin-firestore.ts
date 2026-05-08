@@ -3,7 +3,7 @@ import {
   query, where, orderBy, limit, Timestamp, serverTimestamp, onSnapshot,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Bill, MachineLog, Operator, POSMachine, Product, SalesSummary } from '@/types';
+import { Bill, MachineLog, ManagerLog, Operator, POSMachine, Product, SalesSummary } from '@/types';
 import { stripUndefined } from './utils';
 
 function parseDateValue(value: unknown): Date | undefined {
@@ -41,6 +41,14 @@ function mapBillDoc(id: string, data: Record<string, unknown>): Bill {
     createdAt: parseDateValue(data.createdAt) || new Date(),
     paidAt: parseDateValue(data.paidAt),
   } as Bill;
+}
+
+function mapManagerLogDoc(id: string, data: Record<string, unknown>): ManagerLog {
+  return {
+    id,
+    ...data,
+    timestamp: parseDateValue(data.timestamp) || new Date(),
+  } as ManagerLog;
 }
 
 // ── Machines ──────────────────────────────────────────────────────────────────
@@ -251,6 +259,18 @@ export async function getMachineLogs(filters?: {
   if (filters?.from) logs = logs.filter(l => l.timestamp >= filters.from!);
   if (filters?.to) logs = logs.filter(l => l.timestamp <= filters.to!);
   return logs;
+}
+
+export async function addManagerLog(data: Omit<ManagerLog, 'id' | 'timestamp'>): Promise<void> {
+  await addDoc(collection(db, 'managerLogs'), stripUndefined({
+    ...data,
+    timestamp: serverTimestamp(),
+  }));
+}
+
+export async function getManagerLogs(): Promise<ManagerLog[]> {
+  const snap = await getDocs(query(collection(db, 'managerLogs'), orderBy('timestamp', 'desc'), limit(300)));
+  return snap.docs.map(d => mapManagerLogDoc(d.id, d.data()));
 }
 
 // ── Sales Analytics ───────────────────────────────────────────────────────────

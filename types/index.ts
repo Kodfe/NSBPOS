@@ -183,6 +183,7 @@ export interface Operator {
   currentMachineId?: string;
   currentMachineName?: string;
   isActive: boolean;
+  isManager?: boolean;  // can open limited Manage module from POS
   createdAt: Date;
   lastLoginAt?: Date;
 }
@@ -199,6 +200,18 @@ export interface MachineLog {
   billsCount?: number;             // filled on stop
   totalSales?: number;             // filled on stop
   notes?: string;
+}
+
+export interface ManagerLog {
+  id: string;
+  operatorId: string;
+  operatorName: string;
+  action: 'add' | 'update' | 'delete';
+  module: 'products' | 'purchases' | 'parties' | 'purchaseOrders' | 'purchaseReturns' | 'debitNotes';
+  targetId?: string;
+  targetName?: string;
+  details?: string;
+  timestamp: Date;
 }
 
 export interface SalesSummary {

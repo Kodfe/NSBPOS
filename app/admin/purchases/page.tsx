@@ -1,11 +1,12 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { Plus, Pencil, Trash2, X, Check, Eye, Building2, FileText, ShoppingCart, RotateCcw, FileMinus, Download, IndianRupee, Search, ScanBarcode, Package, Keyboard } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { Party, PurchaseBill, PurchaseItem, PurchaseOrder, PurchaseReturn, DebitNote, Product, Category, StoreSettings } from '@/types';
 import { formatCurrency, normalizeBarcode } from '@/lib/utils';
-import { getAllProducts, adminAddProduct, adminUpdateProduct } from '@/lib/admin-firestore';
+import { addManagerLog, getAllProducts, adminAddProduct, adminUpdateProduct } from '@/lib/admin-firestore';
 import { getCategories } from '@/lib/categories-firestore';
 import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
 import { createGeneratedBarcode, downloadBarcodeSvg } from '@/lib/barcodes';
@@ -104,11 +105,30 @@ function Label({ children }: { children: React.ReactNode }) {
   return <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">{children}</label>;
 }
 
+function useManagerMode() {
+  const pathname = usePathname();
+  return pathname.startsWith('/manage');
+}
+
+function getManagerSession() {
+  if (typeof window === 'undefined') return null;
+  if (!window.location.pathname.startsWith('/manage')) return null;
+  try { return JSON.parse(sessionStorage.getItem('nsb_manager_auth') || 'null') as { operatorId: string; operatorName: string } | null; }
+  catch { return null; }
+}
+
+async function logManagerAdd(module: 'products' | 'purchases' | 'parties' | 'purchaseOrders' | 'purchaseReturns' | 'debitNotes', targetId: string | undefined, targetName: string, details?: string) {
+  const session = getManagerSession();
+  if (!session) return;
+  await addManagerLog({ operatorId: session.operatorId, operatorName: session.operatorName, action: 'add', module, targetId, targetName, details });
+}
+
 // ── Parties Tab ───────────────────────────────────────────────────────────────
 
 const EMPTY_PARTY = { name: '', phone: '', email: '', address: '', gstin: '', contactPerson: '', openingBalance: 0 };
 
 function PartiesTab() {
+  const isManagerMode = useManagerMode();
   const [parties, setParties] = useState<Party[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -127,7 +147,10 @@ function PartiesTab() {
   }
 
   function openAdd() { setEditing(null); setForm(EMPTY_PARTY); setShowModal(true); }
-  function openEdit(p: Party) { setEditing(p); setForm({ name: p.name, phone: p.phone ?? '', email: p.email ?? '', address: p.address ?? '', gstin: p.gstin ?? '', contactPerson: p.contactPerson ?? '', openingBalance: p.openingBalance ?? 0 }); setShowModal(true); }
+  function openEdit(p: Party) {
+    if (isManagerMode) { toast.error('Managers can add parties only'); return; }
+    setEditing(p); setForm({ name: p.name, phone: p.phone ?? '', email: p.email ?? '', address: p.address ?? '', gstin: p.gstin ?? '', contactPerson: p.contactPerson ?? '', openingBalance: p.openingBalance ?? 0 }); setShowModal(true);
+  }
 
   async function handleSave() {
     if (!form.name.trim()) { toast.error('Party name is required'); return; }
@@ -135,13 +158,18 @@ function PartiesTab() {
     try {
       const data = { name: form.name, phone: form.phone || undefined, email: form.email || undefined, address: form.address || undefined, gstin: form.gstin || undefined, contactPerson: form.contactPerson || undefined, openingBalance: form.openingBalance };
       if (editing) { await updateParty(editing.id, data); toast.success('Party updated'); }
-      else { await createParty({ ...data, currentBalance: form.openingBalance }); toast.success('Party added'); }
+      else {
+        const id = await createParty({ ...data, currentBalance: form.openingBalance });
+        await logManagerAdd('parties', id, form.name, `Added party ${form.name}`);
+        toast.success('Party added');
+      }
       setShowModal(false); load();
     } catch (err: any) { toast.error(`Save failed: ${err?.message ?? 'Check connection'}`); }
     finally { setSaving(false); }
   }
 
   async function handleDelete(p: Party) {
+    if (isManagerMode) { toast.error('Managers cannot delete parties'); return; }
     if (!confirm(`Delete party "${p.name}"?`)) return;
     try { await deleteParty(p.id); toast.success('Deleted'); load(); }
     catch (err: any) { toast.error(`Delete failed: ${err?.message ?? ''}`); }
@@ -202,8 +230,12 @@ function PartiesTab() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-lg transition-colors"><Pencil size={13} /></button>
-                      <button onClick={() => handleDelete(p)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13} /></button>
+                      {!isManagerMode && (
+                        <>
+                          <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-lg transition-colors"><Pencil size={13} /></button>
+                          <button onClick={() => handleDelete(p)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={13} /></button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -324,6 +356,7 @@ ${bill.notes ? `<p style="margin-top:14px;font-size:12px;color:#6b7280;border-to
 }
 
 function PurchaseBillsTab({ parties }: { parties: Party[] }) {
+  const isManagerMode = useManagerMode();
   const [bills, setBills] = useState<PurchaseBill[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -629,7 +662,8 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
         status: paid >= billTotal ? 'paid' : paid > 0 ? 'partial' : 'received',
         notes: notes || undefined,
       } satisfies Omit<PurchaseBill, 'id' | 'createdAt'>;
-      await createPurchaseBill(billData);
+      const id = await createPurchaseBill(billData);
+      await logManagerAdd('purchases', id, purchaseNumber, `Added purchase bill for ${party.name}`);
       await applyPurchaseToProducts(validItems);
       setProducts(await getAllProducts());
       toast.success('Purchase bill created');
@@ -642,6 +676,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   }
 
   async function handleBillPaymentStatus(bill: PurchaseBill, status: PurchaseBill['status']) {
+    if (isManagerMode) { toast.error('Managers can add purchase bills only'); return; }
     let paid = bill.amountPaid ?? 0;
     if (status === 'paid') paid = bill.total ?? 0;
     else if (status === 'received' || status === 'draft') paid = 0;
@@ -656,6 +691,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   }
 
   async function handleMarkDraft(bill: PurchaseBill) {
+    if (isManagerMode) { toast.error('Managers can add purchase bills only'); return; }
     try {
       await updatePurchaseBill(bill.id, {
         status: 'draft',
@@ -668,6 +704,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   }
 
   async function handleDeletePurchaseBill(bill: PurchaseBill) {
+    if (isManagerMode) { toast.error('Managers cannot delete purchase bills'); return; }
     if (!confirm(`Delete purchase bill "${bill.purchaseNumber}"?`)) return;
     try {
       await deletePurchaseBill(bill);
@@ -677,6 +714,7 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
   }
 
   async function handleRecordBillPayment() {
+    if (isManagerMode) { toast.error('Managers can add purchase bills only'); return; }
     if (!payBill) return;
     const amt = parseFloat(payAmount);
     if (!amt || amt <= 0) { toast.error('Enter a valid amount'); return; }
@@ -843,36 +881,44 @@ function PurchaseBillsTab({ parties }: { parties: Party[] }) {
                   <td className="px-4 py-3 text-right text-green-600">{formatCurrency(b.amountPaid)}</td>
                   <td className="px-4 py-3 text-right text-red-600 font-medium">{formatCurrency(b.balance)}</td>
                   <td className="px-4 py-3 text-center">
-                    <select
-                      value={b.status}
-                      onChange={e => handleBillPaymentStatus(b, e.target.value as PurchaseBill['status'])}
-                      className={`text-xs font-medium rounded-lg px-2 py-1 border-0 outline-none cursor-pointer ${
-                        b.status === 'paid'     ? 'bg-green-100 text-green-700' :
-                        b.status === 'partial'  ? 'bg-amber-100 text-amber-700' :
-                        b.status === 'draft'    ? 'bg-gray-100 text-gray-600' :
-                                                  'bg-red-50 text-red-600'
-                      }`}
-                    >
-                      <option value="draft">Draft</option>
-                      <option value="received">Unpaid</option>
-                      <option value="partial">Partial Paid</option>
-                      <option value="paid">Paid</option>
-                    </select>
+                    {isManagerMode ? (
+                      <StatusBadge status={b.status} />
+                    ) : (
+                      <select
+                        value={b.status}
+                        onChange={e => handleBillPaymentStatus(b, e.target.value as PurchaseBill['status'])}
+                        className={`text-xs font-medium rounded-lg px-2 py-1 border-0 outline-none cursor-pointer ${
+                          b.status === 'paid'     ? 'bg-green-100 text-green-700' :
+                          b.status === 'partial'  ? 'bg-amber-100 text-amber-700' :
+                          b.status === 'draft'    ? 'bg-gray-100 text-gray-600' :
+                                                    'bg-red-50 text-red-600'
+                        }`}
+                      >
+                        <option value="draft">Draft</option>
+                        <option value="received">Unpaid</option>
+                        <option value="partial">Partial Paid</option>
+                        <option value="paid">Paid</option>
+                      </select>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
                       <button onClick={() => printPurchaseBill(b, getBillParty(b), storeSettings)} title="Download / Print" className="p-1.5 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-lg transition-colors">
                         <Download size={13} />
                       </button>
-                      <button onClick={() => { setPayBill(b); setPayAmount(''); setPayMethod('cash'); }} title="Record Payment" className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
-                        <IndianRupee size={13} />
-                      </button>
-                      <button onClick={() => handleMarkDraft(b)} title="Mark as Draft" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                        <FileText size={13} />
-                      </button>
-                      <button onClick={() => handleDeletePurchaseBill(b)} title="Delete Bill" className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                        <Trash2 size={13} />
-                      </button>
+                      {!isManagerMode && (
+                        <>
+                          <button onClick={() => { setPayBill(b); setPayAmount(''); setPayMethod('cash'); }} title="Record Payment" className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
+                            <IndianRupee size={13} />
+                          </button>
+                          <button onClick={() => handleMarkDraft(b)} title="Mark as Draft" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                            <FileText size={13} />
+                          </button>
+                          <button onClick={() => handleDeletePurchaseBill(b)} title="Delete Bill" className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                            <Trash2 size={13} />
+                          </button>
+                        </>
+                      )}
                       <button onClick={() => setViewBill(b)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                         <Eye size={12} /> View
                       </button>
@@ -1395,6 +1441,7 @@ ${order.notes ? `<p style="margin-top:14px;font-size:12px;color:#6b7280;border-t
 }
 
 function PurchaseOrdersTab({ parties }: { parties: Party[] }) {
+  const isManagerMode = useManagerMode();
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -1430,6 +1477,7 @@ function PurchaseOrdersTab({ parties }: { parties: Party[] }) {
   const orderTotal    = items.reduce((s, it) => s + it.total, 0);
 
   async function handleDeliveryStatus(order: PurchaseOrder, status: PurchaseOrder['status']) {
+    if (isManagerMode) { toast.error('Managers can add purchase orders only'); return; }
     try { await updatePurchaseOrder(order.id, { status }); toast.success(`Marked ${status}`); load(); }
     catch { toast.error('Update failed'); }
   }
@@ -1452,7 +1500,8 @@ function PurchaseOrdersTab({ parties }: { parties: Party[] }) {
         status: 'pending',
         notes: notes || undefined,
       };
-      await createPurchaseOrder(orderData);
+      const id = await createPurchaseOrder(orderData);
+      await logManagerAdd('purchaseOrders', id, orderNumber, `Added purchase order for ${party.name}`);
       toast.success('Purchase order created');
       setShowModal(false);
       printPurchaseOrder({ ...orderData, id: '', createdAt: new Date() } as PurchaseOrder);
@@ -1522,7 +1571,7 @@ function PurchaseOrdersTab({ parties }: { parties: Party[] }) {
                       <button onClick={() => printPurchaseOrder(o)} title="Download / Print" className="p-1.5 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-lg transition-colors">
                         <Download size={13} />
                       </button>
-                      {o.status === 'pending' && (
+                      {!isManagerMode && o.status === 'pending' && (
                         <>
                           <button onClick={() => handleDeliveryStatus(o, 'received')} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors">Rcvd</button>
                           <button onClick={() => handleDeliveryStatus(o, 'cancelled')} className="text-xs px-1.5 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors">✕</button>
@@ -1673,7 +1722,8 @@ function PurchaseReturnsTab({ parties }: { parties: Party[] }) {
       const party = parties.find(p => p.id === partyId)!;
       const existing = await getPurchaseReturns();
       const returnNumber = `RET${String(existing.length + 1).padStart(4, '0')}`;
-      await createPurchaseReturn({ returnNumber, partyId, partyName: party.name, items: validItems, reason: reason || undefined, total, status: 'draft' });
+      const id = await createPurchaseReturn({ returnNumber, partyId, partyName: party.name, items: validItems, reason: reason || undefined, total, status: 'draft' });
+      await logManagerAdd('purchaseReturns', id, returnNumber, `Added purchase return for ${party.name}`);
       toast.success('Purchase return created'); setShowModal(false); load();
     } catch (err: any) { toast.error(`Save failed: ${err?.message ?? 'Check Firestore connection'}`); }
     finally { setSaving(false); }
@@ -1824,7 +1874,8 @@ function DebitNotesTab({ parties }: { parties: Party[] }) {
       const party = parties.find(p => p.id === partyId)!;
       const existing = await getDebitNotes();
       const noteNumber = `DN${String(existing.length + 1).padStart(4, '0')}`;
-      await createDebitNote({ noteNumber, partyId, partyName: party.name, purchaseBillId: linkedBill || undefined, amount: parseFloat(amount), reason, status: 'draft' });
+      const id = await createDebitNote({ noteNumber, partyId, partyName: party.name, purchaseBillId: linkedBill || undefined, amount: parseFloat(amount), reason, status: 'draft' });
+      await logManagerAdd('debitNotes', id, noteNumber, `Added debit note for ${party.name}`);
       toast.success('Debit note created'); setShowModal(false); load();
     } catch (err: any) { toast.error(`Save failed: ${err?.message ?? 'Check Firestore connection'}`); }
     finally { setSaving(false); }

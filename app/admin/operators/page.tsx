@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { Operator, POSMachine } from '@/types';
 import { getOperators, createOperator, updateOperator, deleteOperator, getMachines } from '@/lib/admin-firestore';
 
-const EMPTY = { name: '', pin: '', phone: '', assignedMachineId: '', assignedMachineName: '', isActive: true };
+const EMPTY = { name: '', pin: '', phone: '', assignedMachineId: '', assignedMachineName: '', isActive: true, isManager: false };
 
 export default function OperatorsPage() {
   const [operators, setOperators] = useState<Operator[]>([]);
@@ -30,7 +30,7 @@ export default function OperatorsPage() {
   function openAdd() { setEditing(null); setForm(EMPTY); setPinError(''); setShowModal(true); }
   function openEdit(op: Operator) {
     setEditing(op);
-    setForm({ name: op.name, pin: op.pin, phone: op.phone || '', assignedMachineId: op.assignedMachineId || '', assignedMachineName: op.assignedMachineName || '', isActive: op.isActive });
+    setForm({ name: op.name, pin: op.pin, phone: op.phone || '', assignedMachineId: op.assignedMachineId || '', assignedMachineName: op.assignedMachineName || '', isActive: op.isActive, isManager: !!op.isManager });
     setPinError('');
     setShowModal(true);
   }
@@ -60,6 +60,7 @@ export default function OperatorsPage() {
         assignedMachineId: form.assignedMachineId || undefined,
         assignedMachineName: machine?.name || undefined,
         isActive: form.isActive,
+        isManager: form.isManager,
       };
       if (editing) {
         await updateOperator(editing.id, data);
@@ -140,6 +141,11 @@ export default function OperatorsPage() {
                       {op.assignedMachineName || 'No machine assigned'}
                     </p>
                   </div>
+                  {op.isManager && (
+                    <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                      <Shield size={12} /> Manager access
+                    </div>
+                  )}
 
                   {/* Last login */}
                   {op.lastLoginAt && (
@@ -216,6 +222,11 @@ export default function OperatorsPage() {
                 <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))}
                   className="w-4 h-4 accent-saffron-400" />
                 <span className="text-sm text-gray-700">Active (can login)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
+                <input type="checkbox" checked={form.isManager} onChange={e => setForm(f => ({ ...f, isManager: e.target.checked }))}
+                  className="w-4 h-4 accent-blue-500" />
+                <span className="text-sm text-blue-800">Manager (can access Manage module)</span>
               </label>
             </div>
             <div className="px-6 pb-6 flex gap-3">

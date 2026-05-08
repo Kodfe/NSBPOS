@@ -19,6 +19,7 @@ const NAV = [
   { href: '/admin/machines',   label: 'POS Machines', icon: Monitor,         desc: 'Counters & sessions',    group: 'ops' },
   { href: '/admin/operators',  label: 'Operators',    icon: Users,           desc: 'Staff & PINs',           group: 'ops' },
   { href: '/admin/logs',       label: 'Machine Logs', icon: FileText,        desc: 'Start / stop history',   group: 'ops' },
+  { href: '/admin/manager-logs', label: 'Manager Logs', icon: FileText,      desc: 'Manage module audit',    group: 'ops' },
   { href: '/admin/settings',   label: 'Settings',     icon: Settings,        desc: 'Store & GST config',     group: 'ops' },
 ];
 

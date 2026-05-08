@@ -27,8 +27,9 @@ import { normalizeBarcode } from '@/lib/utils';
 import { Bill, PaymentDetails, Product, Category, StoreSettings, POSMachine, Operator } from '@/types';
 
 const POS_SESSION_KEY = 'nsb_pos_machine_session';
+const MANAGER_KEY = 'nsb_manager_auth';
 const CUSTOMER_SHORTCUT_UPDATE_KEY = 'nsb_pos_customer_shortcut_update_seen_v1';
-const ADMIN_BUTTON_UPDATE_KEY = 'nsb_pos_admin_button_update_seen_v1';
+const MANAGE_BUTTON_UPDATE_KEY = 'nsb_pos_manage_button_update_seen_v1';
 const OPERATOR_INACTIVITY_LOGOUT_MS = 10 * 60 * 1000;
 const OPERATOR_HEARTBEAT_MS = 30 * 1000;
 const OPERATOR_ACTIVITY_EVENTS = ['keydown', 'mousedown', 'mousemove', 'touchstart', 'scroll', 'wheel', 'click'];
@@ -100,7 +101,7 @@ export default function POSPage() {
   const [receiptAutoPrint, setReceiptAutoPrint] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [showCustomerShortcutUpdate, setShowCustomerShortcutUpdate] = useState(false);
-  const [showAdminButtonUpdate, setShowAdminButtonUpdate] = useState(false);
+  const [showManageButtonUpdate, setShowManageButtonUpdate] = useState(false);
   const paymentProcessingRef = useRef(false);
 
   const pos = usePOS();
@@ -126,7 +127,7 @@ export default function POSPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     setShowCustomerShortcutUpdate(localStorage.getItem(CUSTOMER_SHORTCUT_UPDATE_KEY) !== 'true');
-    setShowAdminButtonUpdate(localStorage.getItem(ADMIN_BUTTON_UPDATE_KEY) !== 'true');
+    setShowManageButtonUpdate(localStorage.getItem(MANAGE_BUTTON_UPDATE_KEY) !== 'true');
   }, []);
 
   function dismissCustomerShortcutUpdate() {
@@ -134,9 +135,21 @@ export default function POSPage() {
     setShowCustomerShortcutUpdate(false);
   }
 
-  function dismissAdminButtonUpdate() {
-    localStorage.setItem(ADMIN_BUTTON_UPDATE_KEY, 'true');
-    setShowAdminButtonUpdate(false);
+  function dismissManageButtonUpdate() {
+    localStorage.setItem(MANAGE_BUTTON_UPDATE_KEY, 'true');
+    setShowManageButtonUpdate(false);
+  }
+
+  function openManageModule() {
+    if (!posSession?.operator.isManager) {
+      toast.error('Manager access is not enabled for this operator');
+      return;
+    }
+    sessionStorage.setItem(MANAGER_KEY, JSON.stringify({
+      operatorId: posSession.operator.id,
+      operatorName: posSession.operator.name,
+    }));
+    window.location.href = '/manage/products';
   }
 
   useEffect(() => {
@@ -721,12 +734,14 @@ export default function POSPage() {
           >
             <Receipt size={14} /> Bills
           </button>
-          <button
-            onClick={() => { window.location.href = '/admin'; }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-saffron-700 hover:bg-saffron-50 rounded-lg text-xs font-bold transition-colors"
-          >
-            <Monitor size={14} /> Go to Admin
-          </button>
+          {posSession.operator.isManager && (
+            <button
+              onClick={openManageModule}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-blue-700 hover:bg-blue-50 rounded-lg text-xs font-bold transition-colors"
+            >
+              <Monitor size={14} /> Manage
+            </button>
+          )}
           <button
             onClick={handleStopSession}
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs transition-colors"
@@ -844,7 +859,7 @@ export default function POSPage() {
         </div>
       )}
 
-      {showAdminButtonUpdate && (
+      {showManageButtonUpdate && posSession.operator.isManager && (
         <div className="fixed bottom-[164px] right-4 z-40 w-[340px] rounded-xl border border-blue-200 bg-white shadow-2xl">
           <div className="flex items-start gap-3 p-4">
             <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
@@ -852,18 +867,18 @@ export default function POSPage() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-bold text-gray-900">Admin button added</p>
+                <p className="text-sm font-bold text-gray-900">Manage module added</p>
                 <button
                   type="button"
-                  onClick={dismissAdminButtonUpdate}
+                  onClick={dismissManageButtonUpdate}
                   className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                  aria-label="Close admin button update"
+                  aria-label="Close manage module update"
                 >
                   <X size={14} />
                 </button>
               </div>
               <p className="mt-1 text-xs leading-5 text-gray-600">
-                New update pushed: use the <span className="font-semibold text-blue-700">Go to Admin</span> button in the top bar to open the admin panel.
+                New update pushed: use the <span className="font-semibold text-blue-700">Manage</span> button to add products and purchases. Only manager operators can see it.
               </p>
             </div>
           </div>
