@@ -187,6 +187,7 @@ export interface Operator {
   isActive: boolean;
   isManager?: boolean;  // can open limited Manage module from POS
   isAdmin?: boolean;    // can open full Admin module from POS
+  posGuideSeen?: boolean;
   createdAt: Date;
   lastLoginAt?: Date;
 }

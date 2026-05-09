@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Check, Keyboard, Store, Clock, Wifi, WifiOff, Receipt, Monitor, LockKeyhole, LogOut, Package, X } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Check, Keyboard, Store, Clock, Wifi, WifiOff, Receipt, Monitor, LockKeyhole, LogOut, Package, X, Search, CreditCard, UserPlus, ShieldCheck } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
 
@@ -22,7 +23,7 @@ import { db } from '@/lib/firebase';
 import { addStoreCredit, deductStoreCredit, updateCustomerStats } from '@/lib/customers-firestore';
 import { cancelBill, returnStock, markBillAsAdjusted } from '@/lib/firestore';
 import { getCategories } from '@/lib/categories-firestore';
-import { adminAddProduct, getMachines, startMachineSession, stopMachineSession, updateMachineSessionHeartbeat, verifyOperatorPin } from '@/lib/admin-firestore';
+import { adminAddProduct, getMachines, startMachineSession, stopMachineSession, updateMachineSessionHeartbeat, updateOperator, verifyOperatorPin } from '@/lib/admin-firestore';
 import { normalizeBarcode } from '@/lib/utils';
 import { Bill, PaymentDetails, Product, Category, StoreSettings, POSMachine, Operator } from '@/types';
 
@@ -30,6 +31,7 @@ const POS_SESSION_KEY = 'nsb_pos_machine_session';
 const MANAGER_KEY = 'nsb_manager_auth';
 const CUSTOMER_SHORTCUT_UPDATE_KEY = 'nsb_pos_customer_shortcut_update_seen_v1';
 const MANAGE_BUTTON_UPDATE_KEY = 'nsb_pos_manage_button_update_seen_v2';
+const POS_GUIDE_LOCAL_PREFIX = 'nsb_pos_guide_seen_operator_';
 const OPERATOR_INACTIVITY_LOGOUT_MS = 10 * 60 * 1000;
 const OPERATOR_HEARTBEAT_MS = 30 * 1000;
 const OPERATOR_ACTIVITY_EVENTS = ['keydown', 'mousedown', 'mousemove', 'touchstart', 'scroll', 'wheel', 'click'];
@@ -102,6 +104,7 @@ export default function POSPage() {
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [showCustomerShortcutUpdate, setShowCustomerShortcutUpdate] = useState(false);
   const [showManageButtonUpdate, setShowManageButtonUpdate] = useState(false);
+  const [showPosGuide, setShowPosGuide] = useState(false);
   const paymentProcessingRef = useRef(false);
 
   const pos = usePOS();
@@ -140,6 +143,24 @@ export default function POSPage() {
     setShowManageButtonUpdate(false);
   }
 
+  function maybeShowPosGuide(operator: Operator) {
+    if (typeof window === 'undefined') return;
+    const localSeen = localStorage.getItem(`${POS_GUIDE_LOCAL_PREFIX}${operator.id}`) === 'true';
+    setShowPosGuide(!operator.posGuideSeen && !localSeen);
+  }
+
+  async function completePosGuide() {
+    if (!posSession) return;
+    localStorage.setItem(`${POS_GUIDE_LOCAL_PREFIX}${posSession.operator.id}`, 'true');
+    setShowPosGuide(false);
+    setPosSession(session => session ? { ...session, operator: { ...session.operator, posGuideSeen: true } } : session);
+    try {
+      await updateOperator(posSession.operator.id, { posGuideSeen: true });
+    } catch {
+      toast.error('Guide saved on this device only');
+    }
+  }
+
   function openManageModule() {
     if (!posSession?.operator.isManager) {
       toast.error('Manager access is not enabled for this operator');
@@ -166,6 +187,7 @@ export default function POSPage() {
           const liveMachine = machineData.find(m => m.id === parsed.machine.id);
           if (liveMachine?.isActive && liveMachine.currentOperatorId === parsed.operator.id) {
             setPosSession({ ...parsed, machine: liveMachine });
+            maybeShowPosGuide(parsed.operator);
           } else {
             localStorage.removeItem(POS_SESSION_KEY);
           }
@@ -516,6 +538,7 @@ export default function POSPage() {
       };
       localStorage.setItem(POS_SESSION_KEY, JSON.stringify(session));
       setPosSession(session);
+      maybeShowPosGuide(operator);
       setOperatorPin('');
       toast.success(`POS unlocked: ${machine.name} - ${operator.name}`);
     } catch {
@@ -899,6 +922,39 @@ export default function POSPage() {
         </div>
       )}
 
+      {showPosGuide && posSession && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="bg-saffron-400 px-6 py-5 text-white">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-saffron-100">One-time guided learning</p>
+                  <h2 className="mt-1 text-xl font-bold">Welcome, {posSession.operator.name}</h2>
+                  <p className="mt-1 text-sm text-saffron-100">A quick POS tour before billing starts.</p>
+                </div>
+                <button onClick={completePosGuide} className="rounded-lg bg-white/20 p-1.5 hover:bg-white/30" aria-label="Close guided learning">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="grid gap-3 p-6 sm:grid-cols-2">
+              <GuideItem icon={<Search size={18} />} title="Find products fast" text="Search by item name, item code, or scan barcode. Use Q or arrow keys to jump into quantity." />
+              <GuideItem icon={<UserPlus size={18} />} title="Add customers" text="Press Alt + C to search an existing customer or add a new one before payment." />
+              <GuideItem icon={<CreditCard size={18} />} title="Take payment" text="Use the Pay button for cash, UPI, card, or mixed payment, then print the receipt." />
+              <GuideItem icon={<Receipt size={18} />} title="Bills and returns" text="Open Bills to search old invoices, edit a paid bill, or process returns." />
+              <GuideItem icon={<Keyboard size={18} />} title="Shortcuts help" text="Press F1 anytime to see keyboard shortcuts for faster billing." />
+              <GuideItem icon={<ShieldCheck size={18} />} title="Manager/Admin access" text="If enabled for your PIN, Manage or Admin appears in the top bar after login." />
+            </div>
+            <div className="flex items-center justify-between border-t bg-gray-50 px-6 py-4">
+              <p className="text-xs text-gray-500">This guide will not show again for this operator after closing.</p>
+              <button onClick={completePosGuide} className="rounded-xl bg-saffron-400 px-5 py-2.5 text-sm font-bold text-white hover:bg-saffron-500">
+                Got it, start billing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showPayment && pos.activeBill && (
         <PaymentModal
           total={pos.activeBill.total}
@@ -1027,6 +1083,18 @@ export default function POSPage() {
         </div>
       )}
       <style>{`.label{display:block;font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}.input{width:100%;padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:13px;outline:none;transition:border-color .15s}.input:focus{border-color:#ff9933}`}</style>
+    </div>
+  );
+}
+
+function GuideItem({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-white text-saffron-600 shadow-sm">
+        {icon}
+      </div>
+      <h3 className="text-sm font-bold text-gray-900">{title}</h3>
+      <p className="mt-1 text-xs leading-5 text-gray-500">{text}</p>
     </div>
   );
 }
