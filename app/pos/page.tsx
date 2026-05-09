@@ -748,6 +748,14 @@ export default function POSPage() {
               <Monitor size={14} /> Manage
             </button>
           )}
+          {posSession.operator.isAdmin && (
+            <button
+              onClick={() => { window.location.href = '/admin'; }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white text-purple-700 hover:bg-purple-50 rounded-lg text-xs font-bold transition-colors"
+            >
+              <Monitor size={14} /> Admin
+            </button>
+          )}
           <button
             onClick={handleStopSession}
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs transition-colors"

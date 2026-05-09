@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { Operator, POSMachine } from '@/types';
 import { addManagerLog, getOperators, createOperator, updateOperator, deleteOperator, getMachines } from '@/lib/admin-firestore';
 
-const EMPTY = { name: '', pin: '', phone: '', assignedMachineIds: [] as string[], isActive: true, isManager: false };
+const EMPTY = { name: '', pin: '', phone: '', assignedMachineIds: [] as string[], isActive: true, isManager: false, isAdmin: false };
 
 function getManagerSession() {
   if (typeof window === 'undefined' || !window.location.pathname.startsWith('/manage')) return null;
@@ -40,7 +40,7 @@ export default function OperatorsPage() {
   function openEdit(op: Operator) {
     setEditing(op);
     const machineIds = op.assignedMachineIds?.length ? op.assignedMachineIds : op.assignedMachineId ? [op.assignedMachineId] : [];
-    setForm({ name: op.name, pin: op.pin, phone: op.phone || '', assignedMachineIds: machineIds, isActive: op.isActive, isManager: !!op.isManager });
+    setForm({ name: op.name, pin: op.pin, phone: op.phone || '', assignedMachineIds: machineIds, isActive: op.isActive, isManager: !!op.isManager, isAdmin: !!op.isAdmin });
     setPinError('');
     setShowModal(true);
   }
@@ -82,6 +82,7 @@ export default function OperatorsPage() {
         assignedMachineNames: selectedMachines.map(m => m.name),
         isActive: form.isActive,
         isManager: form.isManager,
+        isAdmin: form.isAdmin,
       };
       if (editing) {
         await updateOperator(editing.id, data);
@@ -172,8 +173,13 @@ export default function OperatorsPage() {
                     </p>
                   </div>
                   {op.isManager && (
-                    <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                    <div className="mb-2 mr-2 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
                       <Shield size={12} /> Manager access
+                    </div>
+                  )}
+                  {op.isAdmin && (
+                    <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700">
+                      <Shield size={12} /> Admin access
                     </div>
                   )}
 
@@ -267,6 +273,11 @@ export default function OperatorsPage() {
                 <input type="checkbox" checked={form.isManager} onChange={e => setForm(f => ({ ...f, isManager: e.target.checked }))}
                   className="w-4 h-4 accent-blue-500" />
                 <span className="text-sm text-blue-800">Manager (can access Manage module)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer rounded-xl border border-purple-100 bg-purple-50 px-3 py-2">
+                <input type="checkbox" checked={form.isAdmin} onChange={e => setForm(f => ({ ...f, isAdmin: e.target.checked }))}
+                  className="w-4 h-4 accent-purple-500" />
+                <span className="text-sm text-purple-800">Admin (can access full Admin module)</span>
               </label>
             </div>
             <div className="px-6 pb-6 flex gap-3">
