@@ -16,6 +16,8 @@ const MODULE_LABELS: Record<ManagerLog['module'], string> = {
   purchaseOrders: 'Purchase Orders',
   purchaseReturns: 'Purchase Returns',
   debitNotes: 'Debit Notes',
+  operators: 'Operators',
+  machines: 'Machines',
 };
 
 export default function ManagerLogsPage() {

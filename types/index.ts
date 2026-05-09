@@ -180,6 +180,8 @@ export interface Operator {
   phone?: string;
   assignedMachineId?: string;
   assignedMachineName?: string;
+  assignedMachineIds?: string[];
+  assignedMachineNames?: string[];
   currentMachineId?: string;
   currentMachineName?: string;
   isActive: boolean;
@@ -207,7 +209,7 @@ export interface ManagerLog {
   operatorId: string;
   operatorName: string;
   action: 'add' | 'update' | 'delete';
-  module: 'products' | 'purchases' | 'parties' | 'purchaseOrders' | 'purchaseReturns' | 'debitNotes';
+  module: 'products' | 'purchases' | 'parties' | 'purchaseOrders' | 'purchaseReturns' | 'debitNotes' | 'operators' | 'machines';
   targetId?: string;
   targetName?: string;
   details?: string;

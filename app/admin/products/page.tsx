@@ -117,6 +117,12 @@ export default function ProductsPage() {
     await addManagerLog({ operatorId: session.operatorId, operatorName: session.operatorName, action: 'add', module: 'products', targetId, targetName, details });
   }
 
+  async function logManagerUpdate(targetId: string, targetName: string, details?: string) {
+    const session = managerSession();
+    if (!session) return;
+    await addManagerLog({ operatorId: session.operatorId, operatorName: session.operatorName, action: 'update', module: 'products', targetId, targetName, details });
+  }
+
   useEffect(() => {
     loadProducts();
     getCategories().then(setCategories);
@@ -134,7 +140,6 @@ export default function ProductsPage() {
 
   function openAdd() { setEditing(null); setForm(emptyProduct(categories)); setShowModal(true); }
   function openEdit(p: Product) {
-    if (isManagerMode) { toast.error('Managers can add products only'); return; }
     setEditing(p); setForm({ ...p }); setShowModal(true);
   }
 
@@ -157,8 +162,8 @@ export default function ProductsPage() {
     setSaving(true);
     try {
       if (editing) {
-        if (isManagerMode) { toast.error('Managers can add products only'); return; }
         await adminUpdateProduct(editing.id, form);
+        await logManagerUpdate(editing.id, form.name, `Edited product ${form.name}`);
         toast.success('Product updated');
       } else {
         const id = await adminAddProduct(form);
@@ -265,7 +270,7 @@ export default function ProductsPage() {
   }
 
   async function handleBulkUpload() {
-    if (isManagerMode) { toast.error('Managers can add one product at a time only'); return; }
+    if (isManagerMode) { toast.error('Managers can add/edit products manually only'); return; }
     setUploading(true);
     try {
       const count = await bulkUpsertProducts(bulkRows);
@@ -303,7 +308,7 @@ export default function ProductsPage() {
         </div>
         <div className="flex items-center gap-2">
           {isManagerMode ? (
-            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Manager: add only</span>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Manager: add/edit only</span>
           ) : (
             <>
               <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
@@ -396,15 +401,13 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
+                      <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-lg transition-colors">
+                        <Pencil size={14} />
+                      </button>
                       {!isManagerMode && (
-                        <>
-                          <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-lg transition-colors">
-                            <Pencil size={14} />
-                          </button>
-                          <button onClick={() => handleDelete(p)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                            <Trash2 size={14} />
-                          </button>
-                        </>
+                        <button onClick={() => handleDelete(p)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                          <Trash2 size={14} />
+                        </button>
                       )}
                     </div>
                   </td>

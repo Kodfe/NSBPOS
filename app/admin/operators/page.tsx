@@ -1,14 +1,23 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { Users, Plus, Pencil, Trash2, X, Check, Shield, Phone, Monitor } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { Operator, POSMachine } from '@/types';
-import { getOperators, createOperator, updateOperator, deleteOperator, getMachines } from '@/lib/admin-firestore';
+import { addManagerLog, getOperators, createOperator, updateOperator, deleteOperator, getMachines } from '@/lib/admin-firestore';
 
-const EMPTY = { name: '', pin: '', phone: '', assignedMachineId: '', assignedMachineName: '', isActive: true, isManager: false };
+const EMPTY = { name: '', pin: '', phone: '', assignedMachineIds: [] as string[], isActive: true, isManager: false };
+
+function getManagerSession() {
+  if (typeof window === 'undefined' || !window.location.pathname.startsWith('/manage')) return null;
+  try { return JSON.parse(sessionStorage.getItem('nsb_manager_auth') || 'null') as { operatorId: string; operatorName: string } | null; }
+  catch { return null; }
+}
 
 export default function OperatorsPage() {
+  const pathname = usePathname();
+  const isManagerMode = pathname.startsWith('/manage');
   const [operators, setOperators] = useState<Operator[]>([]);
   const [machines, setMachines] = useState<POSMachine[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -30,9 +39,19 @@ export default function OperatorsPage() {
   function openAdd() { setEditing(null); setForm(EMPTY); setPinError(''); setShowModal(true); }
   function openEdit(op: Operator) {
     setEditing(op);
-    setForm({ name: op.name, pin: op.pin, phone: op.phone || '', assignedMachineId: op.assignedMachineId || '', assignedMachineName: op.assignedMachineName || '', isActive: op.isActive, isManager: !!op.isManager });
+    const machineIds = op.assignedMachineIds?.length ? op.assignedMachineIds : op.assignedMachineId ? [op.assignedMachineId] : [];
+    setForm({ name: op.name, pin: op.pin, phone: op.phone || '', assignedMachineIds: machineIds, isActive: op.isActive, isManager: !!op.isManager });
     setPinError('');
     setShowModal(true);
+  }
+
+  function toggleMachine(machineId: string) {
+    setForm(f => ({
+      ...f,
+      assignedMachineIds: f.assignedMachineIds.includes(machineId)
+        ? f.assignedMachineIds.filter(id => id !== machineId)
+        : [...f.assignedMachineIds, machineId],
+    }));
   }
 
   function handlePinChange(val: string) {
@@ -50,23 +69,33 @@ export default function OperatorsPage() {
     if (!form.name) { toast.error('Name is required'); return; }
     if (form.pin.length !== 2) { toast.error('PIN must be exactly 2 digits'); return; }
     if (pinError) { toast.error(pinError); return; }
-    const machine = machines.find(m => m.id === form.assignedMachineId);
+    const selectedMachines = machines.filter(m => form.assignedMachineIds.includes(m.id));
     setSaving(true);
     try {
       const data = {
         name: form.name,
         pin: form.pin,
         phone: form.phone,
-        assignedMachineId: form.assignedMachineId || undefined,
-        assignedMachineName: machine?.name || undefined,
+        assignedMachineId: selectedMachines[0]?.id || undefined,
+        assignedMachineName: selectedMachines[0]?.name || undefined,
+        assignedMachineIds: selectedMachines.map(m => m.id),
+        assignedMachineNames: selectedMachines.map(m => m.name),
         isActive: form.isActive,
         isManager: form.isManager,
       };
       if (editing) {
         await updateOperator(editing.id, data);
+        const session = getManagerSession();
+        if (session) {
+          await addManagerLog({ operatorId: session.operatorId, operatorName: session.operatorName, action: 'update', module: 'operators', targetId: editing.id, targetName: form.name, details: `Updated operator ${form.name}` });
+        }
         toast.success('Operator updated');
       } else {
-        await createOperator(data);
+        const id = await createOperator(data);
+        const session = getManagerSession();
+        if (session) {
+          await addManagerLog({ operatorId: session.operatorId, operatorName: session.operatorName, action: 'add', module: 'operators', targetId: id, targetName: form.name, details: `Added operator ${form.name}` });
+        }
         toast.success('Operator created');
       }
       setShowModal(false);
@@ -76,6 +105,7 @@ export default function OperatorsPage() {
   }
 
   async function handleDelete(op: Operator) {
+    if (isManagerMode) { toast.error('Managers cannot delete operators'); return; }
     if (!confirm(`Delete operator "${op.name}"?`)) return;
     try { await deleteOperator(op.id); toast.success('Deleted'); load(); }
     catch { toast.error('Delete failed'); }
@@ -96,7 +126,7 @@ export default function OperatorsPage() {
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
         <div>
           <h1 className="text-lg font-bold text-gray-900">Operators</h1>
-          <p className="text-xs text-gray-500">{operators.length} operators &nbsp;·&nbsp; <span className="text-green-600 font-medium">{operators.filter(o => o.isActive).length} active</span></p>
+          <p className="text-xs text-gray-500">{operators.length} operators &nbsp;·&nbsp; <span className="text-green-600 font-medium">{operators.filter(o => o.isActive).length} active</span>{isManagerMode ? ' · assign multiple counters' : ''}</p>
         </div>
         <button onClick={openAdd} className="flex items-center gap-1.5 px-4 py-2 bg-saffron-400 hover:bg-saffron-500 text-white rounded-lg text-sm font-semibold">
           <Plus size={14} /> Add Operator
@@ -135,10 +165,10 @@ export default function OperatorsPage() {
                   </div>
 
                   {/* Assigned machine */}
-                  <div className={`flex items-center gap-2 rounded-xl px-3 py-2 mb-4 ${op.assignedMachineName ? 'bg-saffron-50' : 'bg-gray-50'}`}>
-                    <Monitor size={14} className={op.assignedMachineName ? 'text-saffron-500' : 'text-gray-400'} />
-                    <p className={`text-xs font-medium ${op.assignedMachineName ? 'text-saffron-700' : 'text-gray-400'}`}>
-                      {op.assignedMachineName || 'No machine assigned'}
+                  <div className={`flex items-center gap-2 rounded-xl px-3 py-2 mb-4 ${(op.assignedMachineNames?.length || op.assignedMachineName) ? 'bg-saffron-50' : 'bg-gray-50'}`}>
+                    <Monitor size={14} className={(op.assignedMachineNames?.length || op.assignedMachineName) ? 'text-saffron-500' : 'text-gray-400'} />
+                    <p className={`text-xs font-medium ${(op.assignedMachineNames?.length || op.assignedMachineName) ? 'text-saffron-700' : 'text-gray-400'}`}>
+                      {op.assignedMachineNames?.length ? op.assignedMachineNames.join(', ') : op.assignedMachineName || 'No machine assigned'}
                     </p>
                   </div>
                   {op.isManager && (
@@ -161,7 +191,7 @@ export default function OperatorsPage() {
                       {op.isActive ? 'Deactivate' : 'Activate'}
                     </button>
                     <button onClick={() => openEdit(op)} className="p-2 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-xl transition-colors"><Pencil size={15} /></button>
-                    <button onClick={() => handleDelete(op)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Trash2 size={15} /></button>
+                    {!isManagerMode && <button onClick={() => handleDelete(op)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Trash2 size={15} /></button>}
                   </div>
                 </div>
               </div>
@@ -210,12 +240,22 @@ export default function OperatorsPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Assign Machine (optional)</label>
-                <select value={form.assignedMachineId} onChange={e => setForm(f => ({ ...f, assignedMachineId: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-saffron-400">
-                  <option value="">— No machine —</option>
-                  {machines.map(m => <option key={m.id} value={m.id}>{m.name} {m.label ? `(${m.label})` : ''}</option>)}
-                </select>
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Assign Counters (optional)</label>
+                <div className="max-h-36 space-y-2 overflow-y-auto rounded-xl border border-gray-200 p-2">
+                  {machines.length === 0 ? (
+                    <p className="px-2 py-1 text-xs text-gray-400">No machines available</p>
+                  ) : machines.map(m => (
+                    <label key={m.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={form.assignedMachineIds.includes(m.id)}
+                        onChange={() => toggleMachine(m.id)}
+                        className="h-4 w-4 accent-saffron-400"
+                      />
+                      <span className="text-sm text-gray-700">{m.name} {m.label ? `(${m.label})` : ''}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <label className="flex items-center gap-2 cursor-pointer">

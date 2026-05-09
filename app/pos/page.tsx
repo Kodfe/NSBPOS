@@ -29,7 +29,7 @@ import { Bill, PaymentDetails, Product, Category, StoreSettings, POSMachine, Ope
 const POS_SESSION_KEY = 'nsb_pos_machine_session';
 const MANAGER_KEY = 'nsb_manager_auth';
 const CUSTOMER_SHORTCUT_UPDATE_KEY = 'nsb_pos_customer_shortcut_update_seen_v1';
-const MANAGE_BUTTON_UPDATE_KEY = 'nsb_pos_manage_button_update_seen_v1';
+const MANAGE_BUTTON_UPDATE_KEY = 'nsb_pos_manage_button_update_seen_v2';
 const OPERATOR_INACTIVITY_LOGOUT_MS = 10 * 60 * 1000;
 const OPERATOR_HEARTBEAT_MS = 30 * 1000;
 const OPERATOR_ACTIVITY_EVENTS = ['keydown', 'mousedown', 'mousemove', 'touchstart', 'scroll', 'wheel', 'click'];
@@ -493,8 +493,14 @@ export default function POSPage() {
         toast.error(`${operator.name} is already active on ${activeOperatorMachine.name}`);
         return;
       }
-      if (operator.assignedMachineId && operator.assignedMachineId !== machine.id) {
-        toast.error(`${operator.name} is assigned to ${operator.assignedMachineName || 'another machine'}`);
+      const assignedMachineIds = operator.assignedMachineIds?.length
+        ? operator.assignedMachineIds
+        : operator.assignedMachineId
+          ? [operator.assignedMachineId]
+          : [];
+      if (assignedMachineIds.length > 0 && !assignedMachineIds.includes(machine.id)) {
+        const assignedName = operator.assignedMachineNames?.join(', ') || operator.assignedMachineName || 'another machine';
+        toast.error(`${operator.name} is assigned to ${assignedName}`);
         return;
       }
       if (machine.isActive && machine.currentOperatorId !== operator.id) {
@@ -878,7 +884,7 @@ export default function POSPage() {
                 </button>
               </div>
               <p className="mt-1 text-xs leading-5 text-gray-600">
-                New update pushed: use the <span className="font-semibold text-blue-700">Manage</span> button to add products and purchases. Only manager operators can see it.
+                New update pushed: use the <span className="font-semibold text-blue-700">Manage</span> button for products, purchases, operators, and counters. Only manager operators can see it.
               </p>
             </div>
           </div>
