@@ -14,7 +14,7 @@ const NAV = [
   { href: '/manage/categories', label: 'Categories', icon: Tag },
   { href: '/manage/customers', label: 'Customers', icon: UserCircle },
   { href: '/manage/bills', label: 'Bills', icon: Receipt },
-  { href: '/manage/purchases', label: 'Purchases', icon: ShoppingBag },
+  { href: '/manage/purchases', label: 'Purchases', icon: ShoppingBag, kbd: 'Shift+P' },
   { href: '/manage/reports', label: 'Reports', icon: BarChart2 },
   { href: '/manage/operators', label: 'Operators', icon: Users },
   { href: '/manage/machines', label: 'Machines', icon: Monitor },
@@ -38,7 +38,7 @@ export default function ManageSidebar({ managerName, onLogout }: Props) {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {NAV.map(({ href, label, icon: Icon, kbd }) => {
           const active = path.startsWith(href);
           return (
             <Link
@@ -50,6 +50,9 @@ export default function ManageSidebar({ managerName, onLogout }: Props) {
             >
               <Icon size={18} />
               <span className="font-medium">{label}</span>
+              {kbd && !active && (
+                <kbd className="ml-auto px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-[10px] font-mono text-gray-400">{kbd}</kbd>
+              )}
             </Link>
           );
         })}
@@ -59,6 +62,7 @@ export default function ManageSidebar({ managerName, onLogout }: Props) {
         <Link href="/pos" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-gray-400 transition-all hover:bg-gray-800 hover:text-white">
           <Store size={16} />
           <span>Back to POS</span>
+          <kbd className="ml-auto px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-[10px] font-mono text-gray-400">Ctrl+P</kbd>
         </Link>
         <button
           onClick={onLogout}
