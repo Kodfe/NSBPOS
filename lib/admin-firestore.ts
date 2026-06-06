@@ -31,6 +31,7 @@ function mapOperatorDoc(id: string, data: Record<string, unknown>): Operator {
     ...data,
     createdAt: parseDateValue(data.createdAt) || new Date(),
     lastLoginAt: parseDateValue(data.lastLoginAt),
+    deletedAt: parseDateValue(data.deletedAt),
   } as Operator;
 }
 
@@ -155,14 +156,15 @@ export async function stopMachineSession(machine: POSMachine, billsCount: number
 
 // ── Operators ─────────────────────────────────────────────────────────────────
 
-export async function getOperators(): Promise<Operator[]> {
+export async function getOperators(includeDeleted = false): Promise<Operator[]> {
   const snap = await getDocs(query(collection(db, 'operators'), orderBy('createdAt', 'asc')));
-  return snap.docs.map(d => mapOperatorDoc(d.id, d.data()));
+  const operators = snap.docs.map(d => mapOperatorDoc(d.id, d.data()));
+  return includeDeleted ? operators : operators.filter(o => !o.isDeleted);
 }
 
 export function subscribeOperators(cb: (o: Operator[]) => void) {
   return onSnapshot(query(collection(db, 'operators'), orderBy('createdAt', 'asc')), snap => {
-    cb(snap.docs.map(d => mapOperatorDoc(d.id, d.data())));
+    cb(snap.docs.map(d => mapOperatorDoc(d.id, d.data())).filter(o => !o.isDeleted));
   });
 }
 
@@ -233,8 +235,14 @@ export async function updateOperator(id: string, data: Partial<Operator>): Promi
   await updateDoc(doc(db, 'operators', id), data);
 }
 
+// Soft delete: keep the record (so past sales/earnings stay attributable) but
+// flag it deleted and deactivate login. Use getOperators(true) to include these.
 export async function deleteOperator(id: string): Promise<void> {
-  await deleteDoc(doc(db, 'operators', id));
+  await updateDoc(doc(db, 'operators', id), {
+    isDeleted: true,
+    isActive: false,
+    deletedAt: serverTimestamp(),
+  });
 }
 
 export async function verifyOperatorPin(pin: string): Promise<Operator | null> {

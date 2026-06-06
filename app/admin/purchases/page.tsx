@@ -106,8 +106,11 @@ function Label({ children }: { children: React.ReactNode }) {
 }
 
 function useManagerMode() {
-  const pathname = usePathname();
-  return pathname.startsWith('/manage');
+  // Managers now have full access to Purchases (same as admin). Kept as a hook so
+  // call sites are unchanged; always false = no restrictions. Audit logging still
+  // runs via getManagerSession(), which independently checks the /manage session.
+  usePathname();
+  return false;
 }
 
 function getManagerSession() {
