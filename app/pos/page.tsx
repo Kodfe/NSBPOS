@@ -419,6 +419,13 @@ export default function POSPage() {
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        // Emergency: skip the payment popup and save + print the bill automatically
+        e.preventDefault();
+        if (pos.activeBill?.items.length) void quickSaveBill(true);
+        return;
+      }
+      if (e.shiftKey && e.key === 'Enter') {
+        // Open payment popup to choose a method, then confirm with Enter inside it
         e.preventDefault();
         if (pos.activeBill?.items.length) setShowPayment(true);
         return;
@@ -482,7 +489,6 @@ export default function POSPage() {
           document.querySelector<HTMLButtonElement>('[data-pos-bill-tab][data-active="true"]')?.focus();
           break;
         case 'Escape': setShowPayment(false); setShowCustomer(false); setShowShortcuts(false); break;
-        case 'Enter': e.preventDefault(); void quickSaveBill(true); break;
         case 'Backspace':
         case 'Delete':
           e.preventDefault();

@@ -4,7 +4,9 @@ import { X } from 'lucide-react';
 interface Props { onClose: () => void }
 
 const SHORTCUTS = [
-  { key: 'Enter', desc: 'Add selected item / confirm / print' },
+  { key: 'Enter', desc: 'Add selected item / confirm' },
+  { key: 'Shift + Enter', desc: 'Open payment popup → pick method, Enter to bill' },
+  { key: 'Ctrl + Enter', desc: 'Emergency: skip popup, bill & print automatically' },
   { key: 'Tab', desc: 'Move between fields' },
   { key: 'Esc', desc: 'Cancel action / close popup' },
   { key: 'Ctrl + S', desc: 'Save bill without printing' },
@@ -20,7 +22,6 @@ const SHORTCUTS = [
   { key: 'Backspace / Del', desc: 'Remove selected item, or close bill tab when on bill' },
   { key: 'P', desc: 'Change sale price' },
   { key: 'Q', desc: 'Change quantity' },
-  { key: 'Ctrl + Enter', desc: 'Quick checkout' },
   { key: 'F1 / ?', desc: 'Show shortcuts help' },
 ];
 
