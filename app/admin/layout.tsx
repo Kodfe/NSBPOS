@@ -17,6 +17,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setChecking(false);
   }, []);
 
+  // Ctrl+P returns to the POS screen from anywhere in Admin
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        router.push('/pos');
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [router]);
+
   function handleLogin() {
     sessionStorage.setItem(ADMIN_KEY, 'true');
     setAuthed(true);

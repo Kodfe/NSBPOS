@@ -71,6 +71,7 @@ export default function AdminSidebar({ onLogout }: Props) {
         <Link href="/pos" className="flex items-center gap-3 px-3 py-2 rounded-xl text-gray-400 hover:bg-gray-800 hover:text-white transition-all text-sm">
           <ShoppingCart size={16} />
           <span>Go to POS</span>
+          <kbd className="ml-auto px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-[10px] font-mono text-gray-400">Ctrl+P</kbd>
         </Link>
         <button
           onClick={onLogout}
