@@ -106,9 +106,16 @@ export default function OperatorsPage() {
   }
 
   async function handleDelete(op: Operator) {
-    if (isManagerMode) { toast.error('Managers cannot delete operators'); return; }
-    if (!confirm(`Delete operator "${op.name}"?`)) return;
-    try { await deleteOperator(op.id); toast.success('Deleted'); load(); }
+    if (!confirm(`Delete operator "${op.name}"?\n\nThey will be removed from the list but their past sales/earnings are kept in reports.`)) return;
+    try {
+      await deleteOperator(op.id);
+      const session = getManagerSession();
+      if (session) {
+        await addManagerLog({ operatorId: session.operatorId, operatorName: session.operatorName, action: 'delete', module: 'operators', targetId: op.id, targetName: op.name, details: `Removed operator ${op.name}` });
+      }
+      toast.success('Operator removed');
+      load();
+    }
     catch { toast.error('Delete failed'); }
   }
 
@@ -197,7 +204,7 @@ export default function OperatorsPage() {
                       {op.isActive ? 'Deactivate' : 'Activate'}
                     </button>
                     <button onClick={() => openEdit(op)} className="p-2 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-xl transition-colors"><Pencil size={15} /></button>
-                    {!isManagerMode && <button onClick={() => handleDelete(op)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Trash2 size={15} /></button>}
+                    <button onClick={() => handleDelete(op)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Trash2 size={15} /></button>
                   </div>
                 </div>
               </div>

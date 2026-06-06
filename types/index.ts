@@ -188,6 +188,8 @@ export interface Operator {
   isManager?: boolean;  // can open limited Manage module from POS
   isAdmin?: boolean;    // can open full Admin module from POS
   posGuideSeen?: boolean;
+  isDeleted?: boolean;  // soft-deleted — hidden from lists but kept for sales history
+  deletedAt?: Date;
   createdAt: Date;
   lastLoginAt?: Date;
 }

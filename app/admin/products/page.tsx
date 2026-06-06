@@ -90,10 +90,9 @@ function normalizeBillBookRows(rows: Record<string, unknown>[]) {
 // Memoized row — only re-renders when its own product/handlers change, so opening
 // or typing in the Add/Edit modal no longer re-renders the entire products table.
 const ProductRow = memo(function ProductRow({
-  p, isManagerMode, onEdit, onDelete,
+  p, onEdit, onDelete,
 }: {
   p: Product;
-  isManagerMode: boolean;
   onEdit: (p: Product) => void;
   onDelete: (p: Product) => void;
 }) {
@@ -138,11 +137,9 @@ const ProductRow = memo(function ProductRow({
           <button onClick={() => onEdit(p)} className="p-1.5 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-lg transition-colors">
             <Pencil size={14} />
           </button>
-          {!isManagerMode && (
-            <button onClick={() => onDelete(p)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-              <Trash2 size={14} />
-            </button>
-          )}
+          <button onClick={() => onDelete(p)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+            <Trash2 size={14} />
+          </button>
         </div>
       </td>
     </tr>
@@ -239,11 +236,16 @@ export default function ProductsPage() {
   }
 
   const handleDelete = useCallback(async (p: Product) => {
-    if (isManagerMode) { toast.error('Managers cannot delete products'); return; }
     if (!confirm(`Delete "${p.name}"?`)) return;
-    try { await adminDeleteProduct(p.id); toast.success('Deleted'); loadProducts(); }
+    try {
+      await adminDeleteProduct(p.id);
+      const session = managerSession();
+      if (session) await addManagerLog({ operatorId: session.operatorId, operatorName: session.operatorName, action: 'delete', module: 'products', targetId: p.id, targetName: p.name, details: `Deleted product ${p.name}` });
+      toast.success('Deleted');
+      loadProducts();
+    }
     catch { toast.error('Delete failed'); }
-  }, [isManagerMode, loadProducts]);
+  }, [loadProducts]);
 
   // ── CSV Export ────────────────────────────────────────────────────────────
 
@@ -332,7 +334,6 @@ export default function ProductsPage() {
   }
 
   async function handleBulkUpload() {
-    if (isManagerMode) { toast.error('Managers can add/edit products manually only'); return; }
     setUploading(true);
     try {
       const count = await bulkUpsertProducts(bulkRows);
@@ -372,21 +373,15 @@ export default function ProductsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isManagerMode ? (
-            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Manager: add/edit only</span>
-          ) : (
-            <>
-              <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-                <FileText size={14} /> Template
-              </button>
-              <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-                <Download size={14} /> Export CSV
-              </button>
-              <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 border border-saffron-200 text-saffron-700 rounded-lg text-sm hover:bg-saffron-50">
-                <Upload size={14} /> Import CSV/Excel
-              </button>
-            </>
-          )}
+          <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+            <FileText size={14} /> Template
+          </button>
+          <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+            <Download size={14} /> Export CSV
+          </button>
+          <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 border border-saffron-200 text-saffron-700 rounded-lg text-sm hover:bg-saffron-50">
+            <Upload size={14} /> Import CSV/Excel
+          </button>
           <button onClick={openAdd} className="flex items-center gap-1.5 px-4 py-2 bg-saffron-400 hover:bg-saffron-500 text-white rounded-lg text-sm font-semibold">
             <Plus size={14} /> Add Product
           </button>
@@ -428,7 +423,7 @@ export default function ProductsPage() {
           </thead>
           <tbody className="bg-white divide-y divide-gray-50">
             {filtered.map(p => (
-              <ProductRow key={p.id} p={p} isManagerMode={isManagerMode} onEdit={openEdit} onDelete={handleDelete} />
+              <ProductRow key={p.id} p={p} onEdit={openEdit} onDelete={handleDelete} />
             ))}
             {filtered.length === 0 && (
               <tr><td colSpan={8} className="px-5 py-12 text-center text-gray-300">No products found</td></tr>

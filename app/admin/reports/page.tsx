@@ -1,16 +1,16 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
-import { Download, RefreshCw, TrendingUp, TrendingDown, Receipt, Package, CalendarDays, Monitor } from 'lucide-react';
+import { Download, RefreshCw, TrendingUp, TrendingDown, Receipt, Package, CalendarDays, Monitor, Users } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { getAllBills } from '@/lib/firestore';
-import { getAllProducts, getMachines } from '@/lib/admin-firestore';
+import { getAllProducts, getMachines, getOperators } from '@/lib/admin-firestore';
 import { loadSettings, DEFAULT_SETTINGS } from '@/lib/settings';
 import { formatCurrency } from '@/lib/utils';
-import { Bill, POSMachine, Product, StoreSettings } from '@/types';
+import { Bill, Operator, POSMachine, Product, StoreSettings } from '@/types';
 
 type Range = 'today' | 'yesterday' | '7days' | '30days' | 'month' | 'financialYear' | 'custom';
-type ReportTab = 'summary' | 'pl' | 'gst';
+type ReportTab = 'summary' | 'pl' | 'gst' | 'operators';
 
 const GST_SLABS = [0, 5, 12, 18, 28];
 
@@ -250,6 +250,7 @@ export default function ReportsPage() {
   const [bills, setBills]             = useState<Bill[]>([]);
   const [products, setProducts]       = useState<Product[]>([]);
   const [machines, setMachines]       = useState<POSMachine[]>([]);
+  const [operators, setOperators]     = useState<Operator[]>([]);
   const [settings, setSettings]       = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading]         = useState(false);
 
@@ -257,6 +258,7 @@ export default function ReportsPage() {
     loadSettings().then(setSettings);
     getAllProducts().then(setProducts).catch(() => {});
     getMachines().then(setMachines).catch(() => {});
+    getOperators(true).then(setOperators).catch(() => {}); // include deleted — keep their earnings visible
   }, []);
 
   const load = useCallback(async () => {
@@ -316,6 +318,48 @@ export default function ReportsPage() {
     else if (bill.paymentMethod === 'mixed') row.mixed += bill.total;
   }
   const counterRows = Object.values(counterMap).sort((a, b) => b.sales - a.sales);
+
+  // ── Operator-wise earnings (includes deleted operators, flagged) ────────────
+  type OperatorSalesRow = {
+    id: string;
+    name: string;
+    isDeleted: boolean;
+    bills: number;
+    items: number;
+    sales: number;
+    gst: number;
+    discount: number;
+    cash: number;
+    upi: number;
+    card: number;
+    mixed: number;
+  };
+  const operatorMap = Object.fromEntries(operators.map(op => [op.id, op]));
+  const operatorSalesMap: Record<string, OperatorSalesRow> = {};
+  for (const bill of bills) {
+    const key = bill.operatorId || 'unassigned';
+    const op = bill.operatorId ? operatorMap[bill.operatorId] : undefined;
+    const name = op?.name || bill.operatorName || (bill.operatorId ? 'Unknown operator' : 'Unassigned');
+    if (!operatorSalesMap[key]) {
+      operatorSalesMap[key] = {
+        id: key, name,
+        // Treat operators no longer in the active list (soft-deleted or removed) as deleted
+        isDeleted: bill.operatorId ? (op ? !!op.isDeleted : true) : false,
+        bills: 0, items: 0, sales: 0, gst: 0, discount: 0, cash: 0, upi: 0, card: 0, mixed: 0,
+      };
+    }
+    const row = operatorSalesMap[key];
+    row.bills += 1;
+    row.items += bill.items.reduce((sum, item) => sum + (item.weightKg ?? item.quantity), 0);
+    row.sales += bill.total;
+    row.gst += bill.totalGst;
+    row.discount += bill.totalDiscount;
+    if (bill.paymentMethod === 'cash') row.cash += bill.total;
+    else if (bill.paymentMethod === 'upi') row.upi += bill.total;
+    else if (bill.paymentMethod === 'card') row.card += bill.total;
+    else if (bill.paymentMethod === 'mixed') row.mixed += bill.total;
+  }
+  const operatorRows = Object.values(operatorSalesMap).sort((a, b) => b.sales - a.sales);
 
   // ── P&L stats ─────────────────────────────────────────────────────────────
   type PLRow = { name: string; category: string; qtySold: number; revenue: number; cogs: number; profit: number; margin: number };
@@ -414,7 +458,7 @@ export default function ReportsPage() {
 
         {/* Report tabs */}
         <div className="flex gap-0 bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-          {([['summary', 'Sales Summary'], ['pl', 'P&L Report'], ['gst', 'GST Report']] as [ReportTab, string][]).map(([key, label]) => (
+          {([['summary', 'Sales Summary'], ['operators', 'Operator Earnings'], ['pl', 'P&L Report'], ['gst', 'GST Report']] as [ReportTab, string][]).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
               className={`flex-1 py-3 text-sm font-medium transition-all border-b-2 ${tab === key ? 'border-saffron-400 text-saffron-600 bg-saffron-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
               {label}
@@ -543,6 +587,70 @@ export default function ReportsPage() {
             {bills.length === 0 && !loading && (
               <div className="text-center py-16 text-gray-400"><Receipt size={40} className="mx-auto mb-3 opacity-30" /><p>No paid bills found for this period</p></div>
             )}
+          </div>
+        )}
+
+        {/* ── Operator Earnings Tab ── */}
+        {tab === 'operators' && (
+          <div className="space-y-5">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Users size={16} className="text-saffron-500" />
+                  <h3 className="text-sm font-bold text-gray-800">Earnings per Operator</h3>
+                </div>
+                <p className="text-xs text-gray-400">{operatorRows.length} operators · deleted staff kept for history</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                    <tr>
+                      <th className="text-left px-5 py-3">Operator</th>
+                      <th className="text-right px-5 py-3">Bills</th>
+                      <th className="text-right px-5 py-3">Items</th>
+                      <th className="text-right px-5 py-3">Sales</th>
+                      <th className="text-right px-5 py-3">Avg Bill</th>
+                      <th className="text-right px-5 py-3">GST</th>
+                      <th className="text-right px-5 py-3">Discount</th>
+                      <th className="text-right px-5 py-3">Cash</th>
+                      <th className="text-right px-5 py-3">UPI</th>
+                      <th className="text-right px-5 py-3">Card</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {operatorRows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50">
+                        <td className="px-5 py-3 font-medium text-gray-800">
+                          <span className="inline-flex items-center gap-2">
+                            {row.name}
+                            {row.isDeleted && (
+                              <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-600">
+                                Deleted
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-right text-gray-600">{row.bills}</td>
+                        <td className="px-5 py-3 text-right text-gray-600">{row.items.toFixed(2)}</td>
+                        <td className="px-5 py-3 text-right font-semibold text-saffron-600">{formatCurrency(row.sales)}</td>
+                        <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.bills > 0 ? row.sales / row.bills : 0)}</td>
+                        <td className="px-5 py-3 text-right text-gray-600">{formatCurrency(row.gst)}</td>
+                        <td className="px-5 py-3 text-right text-red-500">{formatCurrency(row.discount)}</td>
+                        <td className="px-5 py-3 text-right text-green-600">{formatCurrency(row.cash)}</td>
+                        <td className="px-5 py-3 text-right text-blue-600">{formatCurrency(row.upi)}</td>
+                        <td className="px-5 py-3 text-right text-purple-600">{formatCurrency(row.card)}</td>
+                      </tr>
+                    ))}
+                    {operatorRows.length === 0 && (
+                      <tr><td colSpan={10} className="px-5 py-12 text-center text-gray-300">No operator sales for this period</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400">
+              Operators removed from the system are still shown here (tagged <span className="font-semibold text-red-500">Deleted</span>) so their past earnings remain auditable.
+            </p>
           </div>
         )}
 
