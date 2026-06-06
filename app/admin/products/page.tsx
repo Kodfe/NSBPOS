@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { usePathname } from 'next/navigation';
 import { Plus, Search, Download, Upload, Pencil, Trash2, Scale, X, Check, AlertTriangle, FileText } from 'lucide-react';
 import Papa from 'papaparse';
@@ -87,6 +87,68 @@ function normalizeBillBookRows(rows: Record<string, unknown>[]) {
   }).filter(r => r.name && r.price > 0);
 }
 
+// Memoized row — only re-renders when its own product/handlers change, so opening
+// or typing in the Add/Edit modal no longer re-renders the entire products table.
+const ProductRow = memo(function ProductRow({
+  p, isManagerMode, onEdit, onDelete,
+}: {
+  p: Product;
+  isManagerMode: boolean;
+  onEdit: (p: Product) => void;
+  onDelete: (p: Product) => void;
+}) {
+  const lowStock = p.stock <= (p.minStock || 5);
+  const negativeStock = p.stock < 0;
+  return (
+    <tr className="hover:bg-gray-50 transition-colors">
+      <td className="px-5 py-3">
+        <div className="flex items-center gap-2">
+          {p.isLoose && <Scale size={12} className="text-amber-500 flex-shrink-0" />}
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-medium text-gray-900">{p.name}</p>
+              {p.isLoose && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                  Loose
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-400">{p.barcode || 'No barcode'} · {p.brand}</p>
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-3 text-gray-600">{p.category}</td>
+      <td className="px-4 py-3 text-right font-semibold text-saffron-600">₹{p.price}{p.isLoose ? '/kg' : ''}</td>
+      <td className="px-4 py-3 text-right text-gray-400">₹{p.mrp}</td>
+      <td className="px-4 py-3 text-right text-gray-500">{p.gstRate}%</td>
+      <td className="px-4 py-3 text-right">
+        <span className={`font-medium ${negativeStock ? 'text-red-600' : lowStock ? 'text-red-500' : 'text-green-600'}`}>
+          {p.stock} {p.unit}
+        </span>
+        {negativeStock && <span className="ml-1 text-[10px] font-semibold text-red-600">NEG</span>}
+        {lowStock && <AlertTriangle size={12} className="inline ml-1 text-amber-500" />}
+      </td>
+      <td className="px-4 py-3 text-center">
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${p.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+          {p.isActive ? 'Active' : 'Inactive'}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1 justify-end">
+          <button onClick={() => onEdit(p)} className="p-1.5 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-lg transition-colors">
+            <Pencil size={14} />
+          </button>
+          {!isManagerMode && (
+            <button onClick={() => onDelete(p)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+});
+
 export default function ProductsPage() {
   const pathname = usePathname();
   const isManagerMode = pathname.startsWith('/manage');
@@ -129,19 +191,19 @@ export default function ProductsPage() {
     loadSettings().then(setStoreSettings).catch(() => {});
   }, []);
 
-  async function loadProducts() {
+  const loadProducts = useCallback(async () => {
     try {
       const data = await getAllProducts();
       setProducts(data);
     } catch {
       setProducts([]);
     }
-  }
+  }, []);
 
   function openAdd() { setEditing(null); setForm(emptyProduct(categories)); setShowModal(true); }
-  function openEdit(p: Product) {
+  const openEdit = useCallback((p: Product) => {
     setEditing(p); setForm({ ...p }); setShowModal(true);
-  }
+  }, []);
 
   function downloadBarcodeLabel() {
     const barcode = form.barcode?.trim() || createGeneratedBarcode(products);
@@ -176,12 +238,12 @@ export default function ProductsPage() {
     finally { setSaving(false); }
   }
 
-  async function handleDelete(p: Product) {
+  const handleDelete = useCallback(async (p: Product) => {
     if (isManagerMode) { toast.error('Managers cannot delete products'); return; }
     if (!confirm(`Delete "${p.name}"?`)) return;
     try { await adminDeleteProduct(p.id); toast.success('Deleted'); loadProducts(); }
     catch { toast.error('Delete failed'); }
-  }
+  }, [isManagerMode, loadProducts]);
 
   // ── CSV Export ────────────────────────────────────────────────────────────
 
@@ -283,14 +345,17 @@ export default function ProductsPage() {
 
   // ── Filter ────────────────────────────────────────────────────────────────
 
-  const filtered = products.filter(p => {
-    const matchCat = catFilter === 'All' || p.category === catFilter;
-    const matchSearch = !search ||
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.barcode || '').includes(search) ||
-      (p.brand || '').toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSearch;
-  });
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return products.filter(p => {
+      const matchCat = catFilter === 'All' || p.category === catFilter;
+      const matchSearch = !search ||
+        p.name.toLowerCase().includes(q) ||
+        (p.barcode || '').includes(search) ||
+        (p.brand || '').toLowerCase().includes(q);
+      return matchCat && matchSearch;
+    });
+  }, [products, catFilter, search]);
 
   const lowStockCount = products.filter(p => p.stock <= (p.minStock || 5)).length;
 
@@ -362,58 +427,9 @@ export default function ProductsPage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-50">
-            {filtered.map(p => {
-              const lowStock = p.stock <= (p.minStock || 5);
-              const negativeStock = p.stock < 0;
-              return (
-                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      {p.isLoose && <Scale size={12} className="text-amber-500 flex-shrink-0" />}
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-gray-900">{p.name}</p>
-                          {p.isLoose && (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
-                              Loose
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-400">{p.barcode || 'No barcode'} · {p.brand}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{p.category}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-saffron-600">₹{p.price}{p.isLoose ? '/kg' : ''}</td>
-                  <td className="px-4 py-3 text-right text-gray-400">₹{p.mrp}</td>
-                  <td className="px-4 py-3 text-right text-gray-500">{p.gstRate}%</td>
-                  <td className="px-4 py-3 text-right">
-                    <span className={`font-medium ${negativeStock ? 'text-red-600' : lowStock ? 'text-red-500' : 'text-green-600'}`}>
-                      {p.stock} {p.unit}
-                    </span>
-                    {negativeStock && <span className="ml-1 text-[10px] font-semibold text-red-600">NEG</span>}
-                    {lowStock && <AlertTriangle size={12} className="inline ml-1 text-amber-500" />}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${p.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {p.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-saffron-500 hover:bg-saffron-50 rounded-lg transition-colors">
-                        <Pencil size={14} />
-                      </button>
-                      {!isManagerMode && (
-                        <button onClick={() => handleDelete(p)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+            {filtered.map(p => (
+              <ProductRow key={p.id} p={p} isManagerMode={isManagerMode} onEdit={openEdit} onDelete={handleDelete} />
+            ))}
             {filtered.length === 0 && (
               <tr><td colSpan={8} className="px-5 py-12 text-center text-gray-300">No products found</td></tr>
             )}

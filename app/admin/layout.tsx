@@ -17,12 +17,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setChecking(false);
   }, []);
 
-  // Ctrl+P returns to the POS screen from anywhere in Admin
+  // Keyboard shortcuts available anywhere in Admin:
+  //   Ctrl+P → back to POS    Shift+P → Purchases
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
         e.preventDefault();
         router.push('/pos');
+        return;
+      }
+      // Shift+P → Purchases, but ignore while typing in a field
+      const tag = (e.target as HTMLElement)?.tagName;
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable;
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'p' && !typing) {
+        e.preventDefault();
+        router.push('/admin/purchases');
       }
     }
     window.addEventListener('keydown', handleKey);
