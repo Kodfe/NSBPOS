@@ -26,6 +26,26 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     }
   }, []);
 
+  // Same keyboard shortcuts as Admin:
+  //   Ctrl+P → back to POS    Shift+P → Purchases
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        router.push('/pos');
+        return;
+      }
+      const tag = (e.target as HTMLElement)?.tagName;
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable;
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'p' && !typing) {
+        e.preventDefault();
+        router.push('/manage/purchases');
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [router]);
+
   function logout() {
     sessionStorage.removeItem(MANAGER_KEY);
     router.replace('/pos');
