@@ -38,6 +38,7 @@ export default function BillingWorkspace({
   onUpdatePrice,
   onUpdateDiscount,
   onRemoveItem,
+  onClearBill,
 }: Props) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
@@ -462,6 +463,13 @@ export default function BillingWorkspace({
             </div>
           )}
         </div>
+      </div>
+
+      <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-2 text-xs text-gray-500">
+        <span>Total Types: {bill.items.length}</span>
+        <button onClick={onClearBill} disabled={bill.items.length === 0} className="rounded border border-gray-200 px-3 py-1.5 text-red-500 disabled:opacity-40">
+          Clear All Items <span className="ml-3 text-gray-400">[CTRL + C]</span>
+        </button>
       </div>
 
       {weightProduct && (
