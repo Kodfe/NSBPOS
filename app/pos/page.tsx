@@ -173,6 +173,17 @@ export default function POSPage() {
     window.location.href = '/manage/products';
   }
 
+  // Ctrl+A: open whichever elevated module this operator has — Admin takes priority, else Manage
+  function openAdminOrManage() {
+    if (posSession?.operator.isAdmin) {
+      window.location.href = '/admin';
+    } else if (posSession?.operator.isManager) {
+      openManageModule();
+    } else {
+      toast.error('Admin/Manager access is not enabled for this operator');
+    }
+  }
+
   useEffect(() => {
     let active = true;
     async function loadMachineLock() {
@@ -416,6 +427,11 @@ export default function POSPage() {
       if ((e.ctrlKey || e.metaKey) && key === 'f') {
         e.preventDefault();
         document.querySelector<HTMLInputElement>('[placeholder*="Search item"]')?.focus();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && key === 'a') {
+        e.preventDefault();
+        openAdminOrManage();
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {

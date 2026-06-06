@@ -16,6 +16,7 @@ const SHORTCUTS = [
   { key: 'F2', desc: 'Open product search' },
   { key: 'Ctrl + F', desc: 'Search product / customer' },
   { key: 'Alt + C', desc: 'Search or add customer' },
+  { key: 'Ctrl + A', desc: 'Open Admin / Manage module' },
   { key: 'N', desc: 'Open a new bill' },
   { key: 'B', desc: 'Go to active bill tab' },
   { key: 'Arrow L/R', desc: 'Switch bills when on bill tab' },
