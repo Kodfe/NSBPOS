@@ -345,9 +345,9 @@ export default function BillingWorkspace({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-white">
-        <div className="min-w-[980px]">
-          <div className="grid grid-cols-[54px_minmax(360px,1fr)_170px_105px_118px_180px_160px_48px] border-b border-gray-300 bg-gray-50 text-[11px] font-bold uppercase tracking-wide text-gray-600">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden bg-white">
+        <div className="w-full">
+          <div className="grid grid-cols-[44px_minmax(140px,1fr)_120px_70px_110px_150px_104px_40px] border-b border-gray-300 bg-gray-50 text-[11px] font-bold uppercase tracking-wide text-gray-600">
             <div className="border-r border-gray-200 px-3 py-3">No</div>
             <div className="border-r border-gray-200 px-3 py-3">Items</div>
             <div className="border-r border-gray-200 px-3 py-3">Item Code</div>
@@ -369,7 +369,7 @@ export default function BillingWorkspace({
                 key={item.product.id}
                 onClick={() => setSelectedProductId(item.product.id)}
                 onFocusCapture={() => setSelectedProductId(item.product.id)}
-                className={`grid grid-cols-[54px_minmax(360px,1fr)_170px_105px_118px_180px_160px_48px] border-b border-gray-200 text-sm ${selectedProductId === item.product.id ? 'bg-blue-50/70' : ''}`}
+                className={`grid grid-cols-[44px_minmax(140px,1fr)_120px_70px_110px_150px_104px_40px] border-b border-gray-200 text-sm ${selectedProductId === item.product.id ? 'bg-blue-50/70' : ''}`}
               >
                 <div className="border-r border-gray-100 px-3 py-3 text-gray-700">{index + 1}</div>
                 <div className="min-w-0 border-r border-gray-100 px-3 py-2">
@@ -421,7 +421,7 @@ export default function BillingWorkspace({
                     onFocus={selectNumberInput}
                     onMouseUp={e => e.preventDefault()}
                     onKeyDown={e => handleCellKey(e, index, 2)}
-                    className="ml-auto w-24 rounded border border-transparent bg-transparent px-2 py-1 text-right outline-none focus:border-blue-300 focus:bg-white"
+                    className="ml-auto w-20 rounded border border-transparent bg-transparent px-2 py-1 text-right outline-none focus:border-blue-300 focus:bg-white"
                   />
                 </div>
                 <div className="border-r border-gray-100 px-3 py-2 text-right">
