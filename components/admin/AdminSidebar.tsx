@@ -14,7 +14,7 @@ const NAV = [
   { href: '/admin/categories', label: 'Categories',   icon: Tag,             desc: 'Add / edit categories',  group: '' },
   { href: '/admin/customers',  label: 'Customers',    icon: UserCircle,      desc: 'Customer accounts',      group: '' },
   { href: '/admin/bills',      label: 'Bills',        icon: Receipt,         desc: 'View & search bills',    group: '' },
-  { href: '/admin/purchases',  label: 'Purchases',    icon: ShoppingBag,     desc: 'Vendors & purchase bills', group: 'purchase' },
+  { href: '/admin/purchases',  label: 'Purchases',    icon: ShoppingBag,     desc: 'Vendors & purchase bills', group: 'purchase', kbd: 'Shift+P' },
   { href: '/admin/reports',    label: 'Reports',      icon: BarChart2,       desc: 'P&L & GST compliance',    group: 'purchase' },
   { href: '/admin/machines',   label: 'POS Machines', icon: Monitor,         desc: 'Counters & sessions',    group: 'ops' },
   { href: '/admin/operators',  label: 'Operators',    icon: Users,           desc: 'Staff & PINs',           group: 'ops' },
@@ -45,7 +45,7 @@ export default function AdminSidebar({ onLogout }: Props) {
 
       {/* Nav */}
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-        {NAV.map(({ href, label, icon: Icon, desc }) => {
+        {NAV.map(({ href, label, icon: Icon, desc, kbd }) => {
           const active = path.startsWith(href);
           return (
             <Link
@@ -60,6 +60,9 @@ export default function AdminSidebar({ onLogout }: Props) {
                 <p className={`text-sm font-medium leading-tight ${active ? 'text-white' : ''}`}>{label}</p>
                 <p className={`text-[10px] truncate ${active ? 'text-saffron-100' : 'text-gray-600'}`}>{desc}</p>
               </div>
+              {kbd && !active && (
+                <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-[10px] font-mono text-gray-400">{kbd}</kbd>
+              )}
               {active && <ChevronRight size={14} className="text-saffron-200" />}
             </Link>
           );
@@ -71,6 +74,7 @@ export default function AdminSidebar({ onLogout }: Props) {
         <Link href="/pos" className="flex items-center gap-3 px-3 py-2 rounded-xl text-gray-400 hover:bg-gray-800 hover:text-white transition-all text-sm">
           <ShoppingCart size={16} />
           <span>Go to POS</span>
+          <kbd className="ml-auto px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-[10px] font-mono text-gray-400">Ctrl+P</kbd>
         </Link>
         <button
           onClick={onLogout}
