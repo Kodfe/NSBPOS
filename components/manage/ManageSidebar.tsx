@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart2, LayoutDashboard, LogOut, Monitor, Package, Receipt, Settings, ShoppingBag, Store, Tag, UserCircle, Users } from 'lucide-react';
+import { BarChart2, LayoutDashboard, LogOut, Monitor, Package, Receipt, ShoppingBag, Store, Tag, UserCircle, Users } from 'lucide-react';
 
 interface Props {
   managerName: string;
@@ -18,7 +18,6 @@ const NAV = [
   { href: '/manage/reports', label: 'Reports', icon: BarChart2 },
   { href: '/manage/operators', label: 'Operators', icon: Users },
   { href: '/manage/machines', label: 'Machines', icon: Monitor },
-  { href: '/manage/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function ManageSidebar({ managerName, onLogout }: Props) {
