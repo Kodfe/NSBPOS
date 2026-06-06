@@ -92,10 +92,19 @@ export default function PaymentModal({
   }
 
   useEffect(() => {
+    const METHODS = ['cash', 'upi', 'card'] as const;
     function handleKey(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
+      }
+      // Left / Right arrows switch payment method (only in the normal collect view)
+      if (!isRefund && !isNoChange && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        event.preventDefault();
+        const dir = event.key === 'ArrowRight' ? 1 : -1;
+        const idx = METHODS.indexOf(method);
+        setMethod(METHODS[(idx + dir + METHODS.length) % METHODS.length]);
+        return;
       }
       if (event.key === 'Enter' && isValid) {
         event.preventDefault();
